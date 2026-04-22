@@ -5,16 +5,18 @@ super("BootScene");
 
 create() {
 
-const width = this.scale.width;
-const height = this.scale.height;
+const width = this.scale.gameSize.width;
+const height = this.scale.gameSize.height;
 
-this.add.text(width/2, 80, "MindFlow", {
-fontSize: "32px",
+this.cameras.main.setBackgroundColor("#000000");
+
+this.add.text(width / 2, height * 0.15, "MindFlow", {
+fontSize: Math.round(width * 0.08) + "px",
 color: "#ffffff"
 }).setOrigin(0.5);
 
-this.add.text(width/2, 140, "Select Age Group", {
-fontSize: "20px",
+this.add.text(width / 2, height * 0.25, "Select Age Group", {
+fontSize: Math.round(width * 0.04) + "px",
 color: "#aaaaaa"
 }).setOrigin(0.5);
 
@@ -27,10 +29,10 @@ const options = [
 
 options.forEach((opt, index) => {
 
-const y = 220 + index * 60;
+const y = height * (0.4 + index * 0.12);
 
-const btn = this.add.text(width/2, y, opt.label, {
-fontSize: "24px",
+const btn = this.add.text(width / 2, y, opt.label, {
+fontSize: Math.round(width * 0.05) + "px",
 backgroundColor: "#222222",
 padding: { x: 20, y: 10 },
 color: "#ffffff"
