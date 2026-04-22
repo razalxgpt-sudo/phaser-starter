@@ -7,13 +7,13 @@ class GameScene extends Phaser.Scene {
 
         this.nodes = [];
         this.connections = [];
-        this.lines = [];
-
         this.activeNode = null;
 
-        this.drawBackground();
+        // 🔥 IMPORTANT pentru mobil
+        this.input.addPointer(3);
 
-        this.generateNodes(6); // test
+        this.drawBackground();
+        this.generateNodes(6);
 
         this.input.on("pointerdown", this.onPointerDown, this);
         this.input.on("pointermove", this.onPointerMove, this);
@@ -39,14 +39,15 @@ class GameScene extends Phaser.Scene {
         }
     }
 
-    /* ---------------- NODE GENERATION ---------------- */
+    /* ---------------- NODES ---------------- */
 
     generateNodes(count) {
 
         const w = this.scale.width;
         const h = this.scale.height;
 
-        const radius = Math.max(40, Math.min(w, h) * 0.06); // 🔥 FIX: mare pe mobil
+        // 🔥 MAI MARE pe mobil
+        const radius = Math.max(60, Math.min(w, h) * 0.08);
 
         let attempts = 0;
 
@@ -69,12 +70,15 @@ class GameScene extends Phaser.Scene {
             if (!ok) continue;
 
             let circle = this.add.circle(x, y, radius, 0xffffff);
-            circle.setStrokeStyle(4, 0x333333);
+            circle.setStrokeStyle(5, 0x333333);
 
-            // simbol
+            // 🔥 HIT AREA REALĂ (CRITIC)
+            circle.setInteractive(new Phaser.Geom.Circle(0, 0, radius + 20), Phaser.Geom.Circle.Contains);
+
             let symbol = this.getRandomSymbol();
+
             let text = this.add.text(x, y, symbol, {
-                fontSize: radius + "px",
+                fontSize: (radius * 0.8) + "px",
                 color: "#000"
             }).setOrigin(0.5);
 
@@ -83,8 +87,7 @@ class GameScene extends Phaser.Scene {
                 y,
                 radius,
                 circle,
-                text,
-                connections: []
+                text
             });
         }
     }
@@ -94,25 +97,15 @@ class GameScene extends Phaser.Scene {
         return Phaser.Utils.Array.GetRandom(symbols);
     }
 
-    /* ---------------- INPUT ---------------- */
-
-    getPointerWorld(pointer) {
-        // 🔥 FIX CRITIC: coordonate corecte mobil
-        const rect = this.game.canvas.getBoundingClientRect();
-
-        return {
-            x: (pointer.clientX - rect.left) * (this.scale.width / rect.width),
-            y: (pointer.clientY - rect.top) * (this.scale.height / rect.height)
-        };
-    }
+    /* ---------------- LOGIC ---------------- */
 
     getNodeAt(x, y) {
         for (let node of this.nodes) {
 
             let dist = Phaser.Math.Distance.Between(x, y, node.x, node.y);
 
-            // 🔥 SNAP PE MARGINE (nu centru)
-            if (dist <= node.radius + 20) { // toleranță mare pt mobil
+            // 🔥 SNAP REAL (margine + toleranță)
+            if (dist <= node.radius + 30) {
                 return node;
             }
         }
@@ -121,29 +114,26 @@ class GameScene extends Phaser.Scene {
 
     onPointerDown(pointer) {
 
-        const pos = this.getPointerWorld(pointer);
-        const node = this.getNodeAt(pos.x, pos.y);
+        const node = this.getNodeAt(pointer.worldX, pointer.worldY);
 
         if (!node) return;
 
         this.activeNode = node;
 
         this.tempLine = this.add.graphics();
-        this.tempLine.lineStyle(6, 0xff9900, 1);
+        this.tempLine.lineStyle(8, 0xff9900, 1);
     }
 
     onPointerMove(pointer) {
 
         if (!this.activeNode || !this.tempLine) return;
 
-        const pos = this.getPointerWorld(pointer);
-
         this.tempLine.clear();
-        this.tempLine.lineStyle(6, 0xff9900, 1);
+        this.tempLine.lineStyle(8, 0xff9900, 1);
 
         this.tempLine.beginPath();
         this.tempLine.moveTo(this.activeNode.x, this.activeNode.y);
-        this.tempLine.lineTo(pos.x, pos.y);
+        this.tempLine.lineTo(pointer.worldX, pointer.worldY);
         this.tempLine.strokePath();
     }
 
@@ -151,14 +141,12 @@ class GameScene extends Phaser.Scene {
 
         if (!this.activeNode) return;
 
-        const pos = this.getPointerWorld(pointer);
-        const target = this.getNodeAt(pos.x, pos.y);
+        const target = this.getNodeAt(pointer.worldX, pointer.worldY);
 
         if (target && target !== this.activeNode) {
 
             if (!this.connectionExists(this.activeNode, target)) {
 
-                // 🔥 SNAP EXACT LA MARGINE (nu centru)
                 const angle = Phaser.Math.Angle.Between(
                     this.activeNode.x,
                     this.activeNode.y,
@@ -173,7 +161,7 @@ class GameScene extends Phaser.Scene {
                 const endY = target.y - Math.sin(angle) * target.radius;
 
                 const line = this.add.graphics();
-                line.lineStyle(6, 0xff9900, 1);
+                line.lineStyle(8, 0xff9900, 1);
                 line.beginPath();
                 line.moveTo(startX, startY);
                 line.lineTo(endX, endY);
