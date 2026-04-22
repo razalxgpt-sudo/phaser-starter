@@ -5,6 +5,8 @@ super("GameScene");
 
 create() {
 
+this.level = window.currentLevel || 1;
+
 this.colors = this.createAdaptiveBackground();
 
 this.nodes = [];
@@ -18,8 +20,7 @@ color: "#ffffff",
 backgroundColor: "#00000066",
 padding: { x: 8, y: 4 }
 })
-.setDepth(2000)
-.setScrollFactor(0);
+.setDepth(2000);
 
 this.createNodes();
 
@@ -33,27 +34,10 @@ this.input.on("pointerup", this.onPointerUp, this);
 createAdaptiveBackground() {
 
 const palettes = {
-
-very_easy:{
-bg:[[0x1e3a8a,0x60a5fa],[0x065f46,0x34d399]],
-node:[0xffd166,0xffadad,0xcaffbf]
-},
-
-easy:{
-bg:[[0x0f172a,0x334155],[0x111827,0x374151]],
-node:[0x90dbf4,0xf1fa8c,0xffb703]
-},
-
-normal:{
-bg:[[0x020617,0x0f172a],[0x030712,0x111827]],
-node:[0x00f5d4,0xffbe0b,0xfb5607]
-},
-
-relaxed:{
-bg:[[0x1c1917,0x44403c],[0x1f2933,0x4b5563]],
-node:[0xa7c957,0xfcbf49,0x90dbf4]
-}
-
+very_easy:{bg:[[0x1e3a8a,0x60a5fa]],node:[0xffd166,0xffadad,0xcaffbf]},
+easy:{bg:[[0x0f172a,0x334155]],node:[0x90dbf4,0xf1fa8c,0xffb703]},
+normal:{bg:[[0x020617,0x0f172a]],node:[0x00f5d4,0xffbe0b,0xfb5607]},
+relaxed:{bg:[[0x1c1917,0x44403c]],node:[0xa7c957,0xfcbf49,0x90dbf4]}
 };
 
 const difficulty = window.playerDifficulty || "normal";
@@ -73,16 +57,16 @@ const height = this.scale.height;
 const graphics = this.add.graphics();
 graphics.setDepth(-1000);
 
-const color1 = Phaser.Display.Color.ValueToColor(topColor);
-const color2 = Phaser.Display.Color.ValueToColor(bottomColor);
+const c1 = Phaser.Display.Color.ValueToColor(topColor);
+const c2 = Phaser.Display.Color.ValueToColor(bottomColor);
 
 for(let i=0;i<height;i++){
 
 const t=i/height;
 
-const r=Phaser.Math.Interpolation.Linear([color1.red,color2.red],t);
-const g=Phaser.Math.Interpolation.Linear([color1.green,color2.green],t);
-const b=Phaser.Math.Interpolation.Linear([color1.blue,color2.blue],t);
+const r=Phaser.Math.Interpolation.Linear([c1.red,c2.red],t);
+const g=Phaser.Math.Interpolation.Linear([c1.green,c2.green],t);
+const b=Phaser.Math.Interpolation.Linear([c1.blue,c2.blue],t);
 
 const color=Phaser.Display.Color.GetColor(r,g,b);
 
@@ -93,23 +77,58 @@ graphics.fillRect(0,i,width,1);
 
 }
 
-/* ---------- GAME ---------- */
+/* ---------- NODES ---------- */
 
 createNodes(){
 
 const width=this.scale.width;
 const height=this.scale.height;
 
-for(let i=0;i<5;i++){
+const nodeCount = Math.min(4 + this.level - 1, 12);
+const minDistance = 80;
 
-const x=Phaser.Math.Between(100,width-100);
-const y=Phaser.Math.Between(120,height-120);
+for(let i=0;i<nodeCount;i++){
 
-const color=Phaser.Utils.Array.GetRandom(this.colors);
+let x,y,valid=false;
 
-const node=this.add.circle(x,y,18,color)
+while(!valid){
+
+x=Phaser.Math.Between(80,width-80);
+y=Phaser.Math.Between(140,height-80);
+
+valid=true;
+
+this.nodes.forEach(n=>{
+const d = Phaser.Math.Distance.Between(x,y,n.x,n.y);
+if(d < minDistance) valid=false;
+});
+
+}
+
+const color = Phaser.Utils.Array.GetRandom(this.colors);
+const weight = Phaser.Math.Between(1,5);
+
+const node = this.add.circle(x,y,20,color)
 .setStrokeStyle(2,0xffffff)
 .setInteractive();
+
+node.weight = weight;
+node.connected = false;
+
+const label = this.add.text(x,y,weight,{
+fontSize:"16px",
+color:"#000000"
+}).setOrigin(0.5);
+
+node.label = label;
+
+this.tweens.add({
+targets: node,
+scale: 1.15,
+duration: 800,
+yoyo: true,
+repeat: -1
+});
 
 this.nodes.push(node);
 
@@ -117,18 +136,15 @@ this.nodes.push(node);
 
 }
 
+/* ---------- INPUT ---------- */
+
 onPointerDown(pointer){
 
 this.nodes.forEach(node=>{
 
-const dist=Phaser.Math.Distance.Between(
-pointer.x,
-pointer.y,
-node.x,
-node.y
-);
+const dist=Phaser.Math.Distance.Between(pointer.x,pointer.y,node.x,node.y);
 
-if(dist<22){
+if(dist<24){
 this.selectedNode=node;
 }
 
@@ -142,14 +158,9 @@ if(!this.selectedNode) return;
 
 this.nodes.forEach(node=>{
 
-const dist=Phaser.Math.Distance.Between(
-pointer.x,
-pointer.y,
-node.x,
-node.y
-);
+const dist=Phaser.Math.Distance.Between(pointer.x,pointer.y,node.x,node.y);
 
-if(dist<22 && node!==this.selectedNode){
+if(dist<24 && node!==this.selectedNode){
 
 this.createConnection(this.selectedNode,node);
 
@@ -165,12 +176,12 @@ this.selectedNode=null;
 
 createConnection(nodeA,nodeB){
 
-const distance=Math.round(
-Phaser.Math.Distance.Between(
+const baseDistance = Phaser.Math.Distance.Between(
 nodeA.x,nodeA.y,
 nodeB.x,nodeB.y
-)
 );
+
+const distance = Math.round(baseDistance * (nodeA.weight + nodeB.weight)/2);
 
 const line=this.add.line(
 0,0,
@@ -181,6 +192,12 @@ nodeB.x,nodeB.y,
 
 line.setOrigin(0,0);
 line.setLineWidth(3);
+
+nodeA.connected = true;
+nodeB.connected = true;
+
+this.stopPulse(nodeA);
+this.stopPulse(nodeB);
 
 const midX=(nodeA.x+nodeB.x)/2;
 const midY=(nodeA.y+nodeB.y)/2;
@@ -198,6 +215,13 @@ this.lines.push({line,costLabel});
 
 this.totalCost+=distance;
 this.costText.setText("Cost: "+this.totalCost);
+
+}
+
+stopPulse(node){
+
+this.tweens.killTweensOf(node);
+node.setScale(1);
 
 }
 
