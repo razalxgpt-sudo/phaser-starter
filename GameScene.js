@@ -1,11 +1,10 @@
-
 class GameScene extends Phaser.Scene {
 
-constructor() {
+constructor(){
 super("GameScene");
 }
 
-create() {
+create(){
 
 this.ageGroup = window.playerAgeGroup || "adult";
 this.level = window.playerLevel || 1;
@@ -14,120 +13,58 @@ this.connections = [];
 this.dragLine = null;
 this.selectedNode = null;
 
-this.createAdaptiveBackground();
+this.createBackground();
 this.createNodes();
 this.enableInteraction();
 
 }
 
-/* =========================
-AGE STYLE
-========================= */
+/* ===================== BACKGROUND ===================== */
 
-getAgeStyle() {
+createBackground(){
 
-const styles = {
-
-child:{nodeColor:0xffcc66,lineColor:0x66ccff,pulse:true,radius:22,fontSize:"18px"},
-teen:{nodeColor:0x00e5ff,lineColor:0xff00ff,pulse:true,radius:18,fontSize:"16px"},
-adult:{nodeColor:0xffffff,lineColor:0x00bcd4,pulse:false,radius:16,fontSize:"14px"},
-senior:{nodeColor:0xfff176,lineColor:0xffffff,pulse:false,radius:20,fontSize:"18px"}
-
-};
-
-return styles[this.ageGroup] || styles.adult;
+const g = this.add.graphics();
+g.fillGradientStyle(0x020617,0x020617,0x030712,0x030712,1);
+g.fillRect(0,0,this.scale.width,this.scale.height);
 
 }
 
-/* =========================
-BACKGROUND
-========================= */
-
-createAdaptiveBackground(){
-
-const palettes={
-child:[[0xE3F2FD,0xBBDEFB],[0xE8F5E9,0xC8E6C9]],
-teen:[[0x0f2027,0x203a43],[0x141e30,0x243b55]],
-adult:[[0x020617,0x020617],[0x030712,0x020617]],
-senior:[[0x1f2933,0x4b5563],[0x374151,0x6b7280]]
-};
-
-const palette=Phaser.Utils.Array.GetRandom(palettes[this.ageGroup]);
-this.drawGradient(palette[0],palette[1]);
-
-}
-
-drawGradient(top,bottom){
-
-const w=this.scale.width;
-const h=this.scale.height;
-
-const g=this.add.graphics().setDepth(-1000);
-
-const c1=Phaser.Display.Color.ValueToColor(top);
-const c2=Phaser.Display.Color.ValueToColor(bottom);
-
-for(let i=0;i<h;i++){
-
-const t=i/h;
-
-const r=Phaser.Math.Linear(c1.red,c2.red,t);
-const gg=Phaser.Math.Linear(c1.green,c2.green,t);
-const b=Phaser.Math.Linear(c1.blue,c2.blue,t);
-
-g.fillStyle(Phaser.Display.Color.GetColor(r,gg,b),1);
-g.fillRect(0,i,w,1);
-
-}
-
-}
-
-/* =========================
-NODES
-========================= */
+/* ===================== NODES ===================== */
 
 createNodes(){
 
-const style=this.getAgeStyle();
-const count=Phaser.Math.Clamp(3+this.level,4,12);
+const count = Phaser.Math.Clamp(3 + this.level,4,12);
 
-this.nodes=[];
+this.nodes = [];
 
 for(let i=0;i<count;i++){
 
-const pos=this.getValidPosition();
-const value=Phaser.Math.Between(1,5);
+const pos = this.getValidPosition();
+const value = Phaser.Math.Between(1,5);
 
-const node=this.add.circle(pos.x,pos.y,style.radius,style.nodeColor);
-node.setStrokeStyle(2,0xffffff);
+const node = this.add.circle(pos.x,pos.y,18,0xffffff);
+node.setStrokeStyle(2,0x000000);
 
-node.value=value;
-node.connected=false;
+node.value = value;
+node.connected = false;
 
-node.fixed=this.level>6 && Math.random()<0.3;
-node.required=this.level>8 && Math.random()<0.2;
-
-if(node.fixed) node.setStrokeStyle(3,0xff0000);
-if(node.required) node.setStrokeStyle(3,0xffff00);
-
-const label=this.add.text(pos.x,pos.y,value,{
-fontSize:style.fontSize,
+const label = this.add.text(pos.x,pos.y,value,{
+fontSize:"14px",
 color:"#000"
 }).setOrigin(0.5);
 
-node.label=label;
+node.label = label;
+
+node.setInteractive(new Phaser.Geom.Circle(0,0,18),Phaser.Geom.Circle.Contains);
+node.input.alwaysEnabled = true;
 
 this.nodes.push(node);
 
-if(style.pulse) this.addPulse(node);
-
 }
 
 }
 
-/* =========================
-NO OVERLAP
-========================= */
+/* ===================== NO OVERLAP ===================== */
 
 getValidPosition(){
 
@@ -156,90 +93,81 @@ return{x,y};
 
 }
 
-/* =========================
-PULSE
-========================= */
-
-addPulse(node){
-
-this.tweens.add({
-targets:node,
-scale:1.15,
-duration:800,
-yoyo:true,
-repeat:-1
-});
-
-}
-
-/* =========================
-INTERACTION
-========================= */
+/* ===================== INTERACTION ===================== */
 
 enableInteraction(){
 
-this.input.on("pointerdown",pointer=>{
+this.input.on("pointerdown",(pointer)=>{
 
-const node=this.getNodeAt(pointer.x,pointer.y);
+const x = pointer.worldX;
+const y = pointer.worldY;
+
+const node = this.getNodeAt(x,y);
 
 if(node){
-this.selectedNode=node;
 
-this.dragLine=this.add.line(
+this.selectedNode = node;
+
+this.dragLine = this.add.line(
 0,0,
 node.x,node.y,
-pointer.x,pointer.y,
+x,y,
 0xffffff
-).setLineWidth(2);
+).setLineWidth(3);
+
 }
 
 });
 
-this.input.on("pointermove",pointer=>{
+this.input.on("pointermove",(pointer)=>{
 
-if(this.dragLine){
+if(!this.dragLine) return;
+
+const x = pointer.worldX;
+const y = pointer.worldY;
+
 this.dragLine.setTo(
 this.selectedNode.x,
 this.selectedNode.y,
-pointer.x,
-pointer.y
+x,
+y
 );
-}
 
 });
 
-this.input.on("pointerup",pointer=>{
+this.input.on("pointerup",(pointer)=>{
 
 if(!this.selectedNode) return;
 
-const target=this.getNodeAt(pointer.x,pointer.y);
+const x = pointer.worldX;
+const y = pointer.worldY;
 
-if(target && target!==this.selectedNode){
+const target = this.getNodeAt(x,y);
+
+if(target && target !== this.selectedNode){
 this.createConnection(this.selectedNode,target);
 }
 
 if(this.dragLine){
 this.dragLine.destroy();
-this.dragLine=null;
+this.dragLine = null;
 }
 
-this.selectedNode=null;
+this.selectedNode = null;
 
 });
 
 }
 
-/* =========================
-GET NODE
-========================= */
+/* ===================== GET NODE ===================== */
 
 getNodeAt(x,y){
 
 for(let node of this.nodes){
 
-const d=Phaser.Math.Distance.Between(x,y,node.x,node.y);
+const d = Phaser.Math.Distance.Between(x,y,node.x,node.y);
 
-if(d<node.radius+5){
+if(d < 25){
 return node;
 }
 
@@ -249,40 +177,34 @@ return null;
 
 }
 
-/* =========================
-CREATE CONNECTION
-========================= */
+/* ===================== CONNECTION ===================== */
 
 createConnection(a,b){
 
-const style=this.getAgeStyle();
-
-const line=this.add.line(
+const line = this.add.line(
 0,0,
 a.x,a.y,
 b.x,b.y,
-style.lineColor
+0x00bcd4
 ).setLineWidth(3);
 
 this.connections.push({a,b,line});
 
-a.connected=true;
-b.connected=true;
+a.connected = true;
+b.connected = true;
 
 }
 
-/* =========================
-UPDATE
-========================= */
+/* ===================== UPDATE ===================== */
 
 update(){
 
 for(let node of this.nodes){
 
 if(!node.connected){
-node.alpha=0.7+Math.sin(this.time.now/300)*0.3;
+node.alpha = 0.7 + Math.sin(this.time.now/300)*0.3;
 }else{
-node.alpha=1;
+node.alpha = 1;
 }
 
 }
