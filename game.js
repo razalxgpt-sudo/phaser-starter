@@ -1,6 +1,6 @@
-// ==============================
-// ISLAND BRIDGES CORE - SINGLE FILE
-// ==============================
+// ==========================================
+// ISLAND BRIDGES - FINAL SINGLE FILE
+// ==========================================
 
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
@@ -12,26 +12,35 @@ let undoStack = [];
 let startNode = null;
 let currentLine = null;
 
-let stats = { moves:0, undos:0, invalid:0 };
 let score = 0;
 let perfectScore = 0;
 
+let stats = { moves:0, undos:0, invalid:0 };
+
 const symbols = ["●","▲","■","◆","★","♥"];
 
+const shapes = ["circle","square","triangle","diamond","star"];
+
 const settings = {
-    useNumbers:false,
-    nodeRadius:26,
-    nodeCount:5,
-    category:"kids"
+category:"kids_small", // kids_small / kids_medium / adult
+nodeRadius:26,
+nodeCount:5
 };
 
 const themes = {
-kids:{
-bg1:"#e0f7fa",
-bg2:"#fff3e0",
+kids_small:{
+bg1:"#fef9c3",
+bg2:"#e0f2fe",
 node:"#ffffff",
-line:"#ff9800",
-pulse:"#ffeb3b"
+line:"#f59e0b",
+pulse:"#fde047"
+},
+kids_medium:{
+bg1:"#ecfeff",
+bg2:"#fef3c7",
+node:"#ffffff",
+line:"#3b82f6",
+pulse:"#22c55e"
 },
 adult:{
 bg1:"#020617",
@@ -74,6 +83,7 @@ x:random(80,canvas.width-80),
 y:random(80,canvas.height-80),
 value:random(1,4),
 symbol:symbols[random(0,symbols.length-1)],
+shape:shapes[random(0,shapes.length-1)],
 connections:0,
 pulse:0
 };
@@ -157,158 +167,13 @@ score -= stats.invalid*3;
 if(score<0) score=0;
 }
 
-function drawConnections(){
+function drawShape(node){
 
-let t=themes[settings.category];
+ctx.fillStyle = themes[settings.category].node;
+ctx.strokeStyle = "#333";
 
-ctx.lineWidth=4;
-ctx.strokeStyle=t.line;
-
-for(let c of connections){
-
-let p1=snapEdge(c.a,c.b);
-let p2=snapEdge(c.b,c.a);
+let r = settings.nodeRadius + Math.sin(node.pulse)*1.5;
 
 ctx.beginPath();
-ctx.moveTo(p1.x,p1.y);
-ctx.lineTo(p2.x,p2.y);
-ctx.stroke();
-}
 
-if(currentLine){
-ctx.beginPath();
-ctx.moveTo(currentLine.x1,currentLine.y1);
-ctx.lineTo(currentLine.x2,currentLine.y2);
-ctx.stroke();
-}
-}
-
-function drawNodes(){
-
-let t=themes[settings.category];
-
-for(let n of nodes){
-
-n.pulse +=0.05;
-let r=settings.nodeRadius + Math.sin(n.pulse)*1.5;
-
-ctx.beginPath();
-ctx.arc(n.x,n.y,r,0,Math.PI*2);
-ctx.fillStyle=t.node;
-ctx.fill();
-ctx.strokeStyle="#333";
-ctx.stroke();
-
-ctx.fillStyle="#000";
-ctx.textAlign="center";
-ctx.textBaseline="middle";
-ctx.font="16px Arial";
-
-if(settings.useNumbers){
-ctx.fillText(n.value,n.x,n.y);
-}else{
-ctx.fillText(n.symbol,n.x,n.y);
-}
-}
-}
-
-function drawScore(){
-
-ctx.fillStyle="rgba(0,0,0,0.4)";
-ctx.fillRect(10,10,180,60);
-
-ctx.fillStyle="#fff";
-ctx.fillText("Scor: "+score,20,30);
-ctx.fillText("Perfect: "+perfectScore,20,50);
-}
-
-function draw(){
-drawBackground();
-drawConnections();
-drawNodes();
-drawScore();
-}
-
-canvas.addEventListener("mousedown",start);
-canvas.addEventListener("mousemove",move);
-canvas.addEventListener("mouseup",end);
-
-canvas.addEventListener("touchstart",e=>start(e.touches[0]));
-canvas.addEventListener("touchmove",e=>move(e.touches[0]));
-canvas.addEventListener("touchend",end);
-
-function start(e){
-
-let n=getNode(e.clientX,e.clientY);
-if(n){
-startNode=n;
-currentLine={
-x1:n.x,
-y1:n.y,
-x2:e.clientX,
-y2:e.clientY
-};
-}
-}
-
-function move(e){
-if(currentLine){
-currentLine.x2=e.clientX;
-currentLine.y2=e.clientY;
-draw();
-}
-}
-
-function end(e){
-
-if(!currentLine) return;
-
-let n=getNode(e.clientX,e.clientY);
-
-if(n && n!==startNode){
-
-stats.moves++;
-
-if(!connectionExists(startNode,n)){
-
-let valid=true;
-
-for(let c of connections){
-if(intersect(startNode,n,c.a,c.b)){
-valid=false;
-}
-}
-
-if(valid){
-let conn={a:startNode,b:n};
-connections.push(conn);
-undoStack.push(conn);
-}else{
-stats.invalid++;
-}
-}
-}
-
-startNode=null;
-currentLine=null;
-
-updateScore();
-draw();
-}
-
-function undo(){
-let c=undoStack.pop();
-if(!c) return;
-connections = connections.filter(x=>x!==c);
-stats.undos++;
-updateScore();
-draw();
-}
-
-window.addEventListener("keydown",e=>{
-if(e.key==="z") undo();
-});
-
-generateNodes();
-updateScore();
-draw();
+if
