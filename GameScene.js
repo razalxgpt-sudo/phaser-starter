@@ -6,9 +6,6 @@ super("GameScene");
 
 create(){
 
-this.ageGroup = window.playerAgeGroup || "adult";
-this.level = window.playerLevel || 1;
-
 this.connections = [];
 this.dragLine = null;
 this.selectedNode = null;
@@ -19,22 +16,17 @@ this.enableInteraction();
 
 }
 
-/* ===================== BACKGROUND ===================== */
+/* BACKGROUND */
 
 createBackground(){
-
-const g = this.add.graphics();
-g.fillGradientStyle(0x020617,0x020617,0x030712,0x030712,1);
-g.fillRect(0,0,this.scale.width,this.scale.height);
-
+this.cameras.main.setBackgroundColor("#020617");
 }
 
-/* ===================== NODES ===================== */
+/* NODES */
 
 createNodes(){
 
-const count = Phaser.Math.Clamp(3 + this.level,4,12);
-
+const count = 5;
 this.nodes = [];
 
 for(let i=0;i<count;i++){
@@ -55,16 +47,13 @@ color:"#000"
 
 node.label = label;
 
-node.setInteractive(new Phaser.Geom.Circle(0,0,18),Phaser.Geom.Circle.Contains);
-node.input.alwaysEnabled = true;
-
 this.nodes.push(node);
 
 }
 
 }
 
-/* ===================== NO OVERLAP ===================== */
+/* NO OVERLAP */
 
 getValidPosition(){
 
@@ -93,16 +82,15 @@ return{x,y};
 
 }
 
-/* ===================== INTERACTION ===================== */
+/* INTERACTION */
 
 enableInteraction(){
 
 this.input.on("pointerdown",(pointer)=>{
 
-const x = pointer.worldX;
-const y = pointer.worldY;
+const p = pointer.positionToCamera(this.cameras.main);
 
-const node = this.getNodeAt(x,y);
+const node = this.getNodeAt(p.x,p.y);
 
 if(node){
 
@@ -111,7 +99,7 @@ this.selectedNode = node;
 this.dragLine = this.add.line(
 0,0,
 node.x,node.y,
-x,y,
+p.x,p.y,
 0xffffff
 ).setLineWidth(3);
 
@@ -123,14 +111,13 @@ this.input.on("pointermove",(pointer)=>{
 
 if(!this.dragLine) return;
 
-const x = pointer.worldX;
-const y = pointer.worldY;
+const p = pointer.positionToCamera(this.cameras.main);
 
 this.dragLine.setTo(
 this.selectedNode.x,
 this.selectedNode.y,
-x,
-y
+p.x,
+p.y
 );
 
 });
@@ -139,10 +126,9 @@ this.input.on("pointerup",(pointer)=>{
 
 if(!this.selectedNode) return;
 
-const x = pointer.worldX;
-const y = pointer.worldY;
+const p = pointer.positionToCamera(this.cameras.main);
 
-const target = this.getNodeAt(x,y);
+const target = this.getNodeAt(p.x,p.y);
 
 if(target && target !== this.selectedNode){
 this.createConnection(this.selectedNode,target);
@@ -150,16 +136,16 @@ this.createConnection(this.selectedNode,target);
 
 if(this.dragLine){
 this.dragLine.destroy();
-this.dragLine = null;
+this.dragLine=null;
 }
 
-this.selectedNode = null;
+this.selectedNode=null;
 
 });
 
 }
 
-/* ===================== GET NODE ===================== */
+/* GET NODE */
 
 getNodeAt(x,y){
 
@@ -167,7 +153,7 @@ for(let node of this.nodes){
 
 const d = Phaser.Math.Distance.Between(x,y,node.x,node.y);
 
-if(d < 25){
+if(d < 22){
 return node;
 }
 
@@ -177,7 +163,7 @@ return null;
 
 }
 
-/* ===================== CONNECTION ===================== */
+/* CONNECTION */
 
 createConnection(a,b){
 
@@ -190,12 +176,12 @@ b.x,b.y,
 
 this.connections.push({a,b,line});
 
-a.connected = true;
-b.connected = true;
+a.connected=true;
+b.connected=true;
 
 }
 
-/* ===================== UPDATE ===================== */
+/* UPDATE */
 
 update(){
 
