@@ -1,20 +1,19 @@
 const config = {
-type: Phaser.AUTO,
-parent: "game-container",
+    type: Phaser.AUTO,
+    parent: "game-container",
 
-scale: {
-mode: Phaser.Scale.FIT,
-autoCenter: Phaser.Scale.CENTER_BOTH,
-width: 480,
-height: 800
-},
+    scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+        width: 480,
+        height: 800
+    },
 
-backgroundColor: "#000000",
+    backgroundColor: "#000000",
 
-scene: [
-BootScene,
-GameScene
-]
+    scene: [GameScene] // 🔥 DOAR asta, fără BootScene dacă nu există
 };
 
-new Phaser.Game(config);
+window.onload = () => {
+    new Phaser.Game(config);
+};
