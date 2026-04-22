@@ -1,179 +1,232 @@
-// ==========================================
-// ISLAND BRIDGES - FINAL SINGLE FILE
-// ==========================================
-
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
+function resize() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resize);
+resize();
+
+/* =========================
+   CONFIG
+========================= */
+
+const AGE_GROUPS = {
+    "3-5": { colors:["#F6E6FF","#E6F7FF","#FFFBE6"], symbols:["●","▲","■"], numbers:false },
+    "6-10": { colors:["#E8F8F5","#FEF5E7","#EBF5FB"], symbols:["◆","⬟","⬢"], numbers:false },
+    "11-16": { colors:["#F4ECF7","#E8F6F3","#FEF9E7"], symbols:null, numbers:true },
+    "17-40": { colors:["#EBF5FB","#FDEDEC","#E8F8F5"], symbols:null, numbers:true },
+    "40+": { colors:["#FDF2E9","#EBF5FB","#F4ECF7"], symbols:null, numbers:true }
+};
+
+let ageGroup = "3-5";
+
+let level = 1;
 let nodes = [];
 let connections = [];
 let undoStack = [];
 
-let startNode = null;
-let currentLine = null;
+let dragging = null;
 
-let score = 0;
-let perfectScore = 0;
+/* =========================
+   BACKGROUND
+========================= */
 
-let stats = { moves:0, undos:0, invalid:0 };
-
-const symbols = ["●","▲","■","◆","★","♥"];
-
-const shapes = ["circle","square","triangle","diamond","star"];
-
-const settings = {
-category:"kids_small", // kids_small / kids_medium / adult
-nodeRadius:26,
-nodeCount:5
-};
-
-const themes = {
-kids_small:{
-bg1:"#fef9c3",
-bg2:"#e0f2fe",
-node:"#ffffff",
-line:"#f59e0b",
-pulse:"#fde047"
-},
-kids_medium:{
-bg1:"#ecfeff",
-bg2:"#fef3c7",
-node:"#ffffff",
-line:"#3b82f6",
-pulse:"#22c55e"
-},
-adult:{
-bg1:"#020617",
-bg2:"#000000",
-node:"#e2e8f0",
-line:"#06b6d4",
-pulse:"#14b8a6"
-}
-};
-
-function resize(){
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
-}
-window.addEventListener("resize",resize);
-resize();
-
-function random(min,max){
-return Math.floor(Math.random()*(max-min+1))+min;
+function drawBackground() {
+    let colors = AGE_GROUPS[ageGroup].colors;
+    let gradient = ctx.createLinearGradient(0,0,canvas.width,canvas.height);
+    gradient.addColorStop(0, colors[0]);
+    gradient.addColorStop(0.5, colors[1]);
+    gradient.addColorStop(1, colors[2]);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
 }
 
-function colinear(a,b,c){
-return Math.abs(
-a.x*(b.y-c.y)+
-b.x*(c.y-a.y)+
-c.x*(a.y-b.y)
-) < 200;
+/* =========================
+   NODE GENERATION
+========================= */
+
+function generateNodes() {
+    nodes = [];
+    connections = [];
+    undoStack = [];
+
+    let count = Math.min(4 + level, 12);
+
+    for(let i=0;i<count;i++){
+        let x,y,ok;
+        do{
+            ok=true;
+            x = 80 + Math.random()*(canvas.width-160);
+            y = 80 + Math.random()*(canvas.height-160);
+
+            for(let n of nodes){
+                if(Math.hypot(n.x-x,n.y-y) < 120) ok=false;
+            }
+        }while(!ok);
+
+        nodes.push({
+            x,
+            y,
+            value:1+Math.floor(Math.random()*5),
+            pulse:Math.random()*Math.PI
+        });
+    }
 }
 
-function generateNodes(){
+/* =========================
+   DRAW NODES
+========================= */
 
-nodes=[];
+function drawNodes(){
+    let cfg = AGE_GROUPS[ageGroup];
 
-let attempts=0;
+    nodes.forEach((n,i)=>{
+        n.pulse += 0.05;
+        let pulse = 1 + Math.sin(n.pulse)*0.05;
 
-while(nodes.length < settings.nodeCount && attempts<500){
+        ctx.beginPath();
+        ctx.arc(n.x,n.y,22*pulse,0,Math.PI*2);
+        ctx.fillStyle="#fff";
+        ctx.fill();
+        ctx.lineWidth=2;
+        ctx.strokeStyle="#333";
+        ctx.stroke();
 
-let n={
-x:random(80,canvas.width-80),
-y:random(80,canvas.height-80),
-value:random(1,4),
-symbol:symbols[random(0,symbols.length-1)],
-shape:shapes[random(0,shapes.length-1)],
-connections:0,
-pulse:0
-};
+        ctx.fillStyle="#111";
+        ctx.font="16px Arial";
+        ctx.textAlign="center";
+        ctx.textBaseline="middle";
 
-let valid=true;
-
-for(let p of nodes){
-let dx=p.x-n.x;
-let dy=p.y-n.y;
-if(Math.sqrt(dx*dx+dy*dy)<120){
-valid=false;
-}
-}
-
-if(valid && nodes.length>=2){
-for(let i=0;i<nodes.length-1;i++){
-for(let j=i+1;j<nodes.length;j++){
-if(colinear(nodes[i],nodes[j],n)){
-valid=false;
-}
-}
-}
+        if(cfg.numbers){
+            ctx.fillText(n.value,n.x,n.y);
+        }else{
+            let s = cfg.symbols[i % cfg.symbols.length];
+            ctx.fillText(s,n.x,n.y);
+        }
+    });
 }
 
-if(valid) nodes.push(n);
+/* =========================
+   DRAW CONNECTIONS
+========================= */
 
-attempts++;
-}
+function drawConnections(){
+    ctx.lineWidth=4;
+    ctx.strokeStyle="#2c3e50";
 
-perfectScore = (nodes.length-1)*10;
-}
-
-function drawBackground(){
-let t=themes[settings.category];
-let g=ctx.createLinearGradient(0,0,canvas.width,canvas.height);
-g.addColorStop(0,t.bg1);
-g.addColorStop(1,t.bg2);
-ctx.fillStyle=g;
-ctx.fillRect(0,0,canvas.width,canvas.height);
-}
-
-function snapEdge(a,b){
-let dx=b.x-a.x;
-let dy=b.y-a.y;
-let len=Math.sqrt(dx*dx+dy*dy);
-return {
-x:a.x+dx/len*settings.nodeRadius,
-y:a.y+dy/len*settings.nodeRadius
-};
+    connections.forEach(c=>{
+        ctx.beginPath();
+        ctx.moveTo(c.a.x,c.a.y);
+        ctx.lineTo(c.b.x,c.b.y);
+        ctx.stroke();
+    });
 }
 
-function getNode(x,y){
-for(let n of nodes){
-let dx=x-n.x;
-let dy=y-n.y;
-if(Math.sqrt(dx*dx+dy*dy)<=settings.nodeRadius){
-return n;
-}
-}
-return null;
-}
+/* =========================
+   INTERSECTION CHECK
+========================= */
 
 function intersect(a,b,c,d){
-function ccw(p1,p2,p3){
-return (p3.y-p1.y)*(p2.x-p1.x)>(p2.y-p1.y)*(p3.x-p1.x);
-}
-return ccw(a,c,d)!=ccw(b,c,d) && ccw(a,b,c)!=ccw(a,b,d);
-}
-
-function connectionExists(a,b){
-return connections.some(c =>
-(c.a===a && c.b===b)||(c.a===b && c.b===a)
-);
+    function ccw(A,B,C){
+        return (C.y-A.y)*(B.x-A.x)>(B.y-A.y)*(C.x-A.x);
+    }
+    return (ccw(a,c,d)!=ccw(b,c,d))&&(ccw(a,b,c)!=ccw(a,b,d));
 }
 
-function updateScore(){
-score = perfectScore;
-score -= stats.moves;
-score -= stats.undos*5;
-score -= stats.invalid*3;
-if(score<0) score=0;
+function canConnect(a,b){
+    for(let c of connections){
+        if(c.a===a || c.a===b || c.b===a || c.b===b) continue;
+        if(intersect(a,b,c.a,c.b)) return false;
+    }
+    return true;
 }
 
-function drawShape(node){
+/* =========================
+   INPUT
+========================= */
 
-ctx.fillStyle = themes[settings.category].node;
-ctx.strokeStyle = "#333";
+canvas.addEventListener("pointerdown",e=>{
+    let rect=canvas.getBoundingClientRect();
+    let x=e.clientX-rect.left;
+    let y=e.clientY-rect.top;
 
-let r = settings.nodeRadius + Math.sin(node.pulse)*1.5;
+    for(let n of nodes){
+        if(Math.hypot(n.x-x,n.y-y)<25){
+            dragging=n;
+        }
+    }
+});
 
-ctx.beginPath();
+canvas.addEventListener("pointerup",e=>{
+    if(!dragging) return;
 
-if
+    let rect=canvas.getBoundingClientRect();
+    let x=e.clientX-rect.left;
+    let y=e.clientY-rect.top;
+
+    for(let n of nodes){
+        if(n!==dragging && Math.hypot(n.x-x,n.y-y)<25){
+            if(canConnect(dragging,n)){
+                connections.push({a:dragging,b:n});
+                undoStack.push({a:dragging,b:n});
+            }
+        }
+    }
+
+    dragging=null;
+});
+
+window.addEventListener("keydown",e=>{
+    if(e.key==="z" || e.key==="Z"){
+        undo();
+    }
+});
+
+/* =========================
+   UNDO
+========================= */
+
+function undo(){
+    if(undoStack.length>0){
+        let last = undoStack.pop();
+        connections = connections.filter(c=>c!==last);
+    }
+}
+
+/* =========================
+   SCORE
+========================= */
+
+function drawScore(){
+    let perfect = nodes.length-1;
+    let current = connections.length;
+
+    ctx.fillStyle="rgba(0,0,0,0.3)";
+    ctx.fillRect(10,10,150,50);
+
+    ctx.fillStyle="#fff";
+    ctx.font="14px Arial";
+    ctx.fillText("Score: "+current,20,30);
+    ctx.fillText("Perfect: "+perfect,20,50);
+}
+
+/* =========================
+   LOOP
+========================= */
+
+function loop(){
+    drawBackground();
+    drawConnections();
+    drawNodes();
+    drawScore();
+    requestAnimationFrame(loop);
+}
+
+/* =========================
+   START
+========================= */
+
+generateNodes();
+loop();
