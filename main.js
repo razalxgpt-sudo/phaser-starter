@@ -1,4 +1,4 @@
-document.addEventListener("DOMContentLoaded", function () {
+window.onload = function () {
 
 const config = {
     type: Phaser.AUTO,
@@ -10,4 +10,4 @@ const config = {
 
 new Phaser.Game(config);
 
-});
+};
