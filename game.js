@@ -1,232 +1,217 @@
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-function resize() {
+/* =======================
+   RESIZE
+======================= */
+function resize(){
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 }
 window.addEventListener("resize", resize);
 resize();
 
-/* =========================
-   CONFIG
-========================= */
-
-const AGE_GROUPS = {
-    "3-5": { colors:["#F6E6FF","#E6F7FF","#FFFBE6"], symbols:["●","▲","■"], numbers:false },
-    "6-10": { colors:["#E8F8F5","#FEF5E7","#EBF5FB"], symbols:["◆","⬟","⬢"], numbers:false },
-    "11-16": { colors:["#F4ECF7","#E8F6F3","#FEF9E7"], symbols:null, numbers:true },
-    "17-40": { colors:["#EBF5FB","#FDEDEC","#E8F8F5"], symbols:null, numbers:true },
-    "40+": { colors:["#FDF2E9","#EBF5FB","#F4ECF7"], symbols:null, numbers:true }
+/* =======================
+   AGE CONFIG
+======================= */
+const AGE = {
+    "3-5": {colors:["#F7F3FF","#EAF7FF","#FFF9E6"], symbols:["●","▲","■"], numbers:false},
+    "6-10": {colors:["#EAFBF3","#FFF3E8","#EEF5FF"], symbols:["◆","⬟","⬢"], numbers:false},
+    "11+": {colors:["#EDF6FF","#FFF0F0","#F2FFF5"], numbers:true}
 };
 
-let ageGroup = "3-5";
+let age = "3-5";
 
-let level = 1;
-let nodes = [];
-let connections = [];
-let undoStack = [];
+/* =======================
+   STATE
+======================= */
+let nodes=[];
+let lines=[];
+let undoStack=[];
+let dragNode=null;
 
-let dragging = null;
-
-/* =========================
+/* =======================
    BACKGROUND
-========================= */
-
-function drawBackground() {
-    let colors = AGE_GROUPS[ageGroup].colors;
-    let gradient = ctx.createLinearGradient(0,0,canvas.width,canvas.height);
-    gradient.addColorStop(0, colors[0]);
-    gradient.addColorStop(0.5, colors[1]);
-    gradient.addColorStop(1, colors[2]);
-    ctx.fillStyle = gradient;
+======================= */
+function drawBG(){
+    const c = AGE[age].colors;
+    const g = ctx.createLinearGradient(0,0,canvas.width,canvas.height);
+    g.addColorStop(0,c[0]);
+    g.addColorStop(.5,c[1]);
+    g.addColorStop(1,c[2]);
+    ctx.fillStyle=g;
     ctx.fillRect(0,0,canvas.width,canvas.height);
 }
 
-/* =========================
-   NODE GENERATION
-========================= */
+/* =======================
+   NODE GEN
+======================= */
+function generate(){
+    nodes=[];
+    lines=[];
+    undoStack=[];
 
-function generateNodes() {
-    nodes = [];
-    connections = [];
-    undoStack = [];
-
-    let count = Math.min(4 + level, 12);
+    const count=5;
 
     for(let i=0;i<count;i++){
         let x,y,ok;
         do{
             ok=true;
-            x = 80 + Math.random()*(canvas.width-160);
-            y = 80 + Math.random()*(canvas.height-160);
+            x=80+Math.random()*(canvas.width-160);
+            y=120+Math.random()*(canvas.height-200);
 
             for(let n of nodes){
-                if(Math.hypot(n.x-x,n.y-y) < 120) ok=false;
+                if(Math.hypot(n.x-x,n.y-y)<110) ok=false;
             }
         }while(!ok);
 
         nodes.push({
-            x,
-            y,
+            x,y,
             value:1+Math.floor(Math.random()*5),
-            pulse:Math.random()*Math.PI
+            pulse:Math.random()*6
         });
     }
 }
 
-/* =========================
+/* =======================
    DRAW NODES
-========================= */
-
+======================= */
 function drawNodes(){
-    let cfg = AGE_GROUPS[ageGroup];
-
     nodes.forEach((n,i)=>{
-        n.pulse += 0.05;
-        let pulse = 1 + Math.sin(n.pulse)*0.05;
+        n.pulse+=0.05;
+        const r=20+(Math.sin(n.pulse)*2);
 
         ctx.beginPath();
-        ctx.arc(n.x,n.y,22*pulse,0,Math.PI*2);
+        ctx.arc(n.x,n.y,r,0,Math.PI*2);
         ctx.fillStyle="#fff";
         ctx.fill();
-        ctx.lineWidth=2;
         ctx.strokeStyle="#333";
+        ctx.lineWidth=2;
         ctx.stroke();
 
         ctx.fillStyle="#111";
-        ctx.font="16px Arial";
+        ctx.font="14px Arial";
         ctx.textAlign="center";
         ctx.textBaseline="middle";
 
-        if(cfg.numbers){
+        if(AGE[age].numbers){
             ctx.fillText(n.value,n.x,n.y);
         }else{
-            let s = cfg.symbols[i % cfg.symbols.length];
+            const s=AGE[age].symbols[i%AGE[age].symbols.length];
             ctx.fillText(s,n.x,n.y);
         }
     });
 }
 
-/* =========================
-   DRAW CONNECTIONS
-========================= */
-
-function drawConnections(){
+/* =======================
+   DRAW LINES
+======================= */
+function drawLines(){
     ctx.lineWidth=4;
     ctx.strokeStyle="#2c3e50";
 
-    connections.forEach(c=>{
+    for(let l of lines){
         ctx.beginPath();
-        ctx.moveTo(c.a.x,c.a.y);
-        ctx.lineTo(c.b.x,c.b.y);
+        ctx.moveTo(l.a.x,l.a.y);
+        ctx.lineTo(l.b.x,l.b.y);
         ctx.stroke();
-    });
+    }
 }
 
-/* =========================
-   INTERSECTION CHECK
-========================= */
-
+/* =======================
+   INTERSECTION
+======================= */
 function intersect(a,b,c,d){
     function ccw(A,B,C){
         return (C.y-A.y)*(B.x-A.x)>(B.y-A.y)*(C.x-A.x);
     }
-    return (ccw(a,c,d)!=ccw(b,c,d))&&(ccw(a,b,c)!=ccw(a,b,d));
+    return (ccw(a,c,d)!=ccw(b,c,d)) && (ccw(a,b,c)!=ccw(a,b,d));
 }
 
 function canConnect(a,b){
-    for(let c of connections){
-        if(c.a===a || c.a===b || c.b===a || c.b===b) continue;
-        if(intersect(a,b,c.a,c.b)) return false;
+    for(let l of lines){
+        if(l.a===a||l.a===b||l.b===a||l.b===b) continue;
+        if(intersect(a,b,l.a,l.b)) return false;
     }
     return true;
 }
 
-/* =========================
+/* =======================
    INPUT
-========================= */
-
+======================= */
 canvas.addEventListener("pointerdown",e=>{
-    let rect=canvas.getBoundingClientRect();
-    let x=e.clientX-rect.left;
-    let y=e.clientY-rect.top;
+    const rect=canvas.getBoundingClientRect();
+    const x=e.clientX-rect.left;
+    const y=e.clientY-rect.top;
 
-    for(let n of nodes){
+    nodes.forEach(n=>{
         if(Math.hypot(n.x-x,n.y-y)<25){
-            dragging=n;
+            dragNode=n;
         }
-    }
+    });
 });
 
 canvas.addEventListener("pointerup",e=>{
-    if(!dragging) return;
+    if(!dragNode) return;
 
-    let rect=canvas.getBoundingClientRect();
-    let x=e.clientX-rect.left;
-    let y=e.clientY-rect.top;
+    const rect=canvas.getBoundingClientRect();
+    const x=e.clientX-rect.left;
+    const y=e.clientY-rect.top;
 
-    for(let n of nodes){
-        if(n!==dragging && Math.hypot(n.x-x,n.y-y)<25){
-            if(canConnect(dragging,n)){
-                connections.push({a:dragging,b:n});
-                undoStack.push({a:dragging,b:n});
+    nodes.forEach(n=>{
+        if(n!==dragNode && Math.hypot(n.x-x,n.y-y)<25){
+            if(canConnect(dragNode,n)){
+                const line={a:dragNode,b:n};
+                lines.push(line);
+                undoStack.push(line);
             }
         }
-    }
+    });
 
-    dragging=null;
+    dragNode=null;
 });
 
-window.addEventListener("keydown",e=>{
-    if(e.key==="z" || e.key==="Z"){
-        undo();
-    }
-});
-
-/* =========================
+/* =======================
    UNDO
-========================= */
-
-function undo(){
-    if(undoStack.length>0){
-        let last = undoStack.pop();
-        connections = connections.filter(c=>c!==last);
+======================= */
+window.addEventListener("keydown",e=>{
+    if(e.key==="z"||e.key==="Z"){
+        if(undoStack.length){
+            const last=undoStack.pop();
+            lines=lines.filter(l=>l!==last);
+        }
     }
-}
+});
 
-/* =========================
+/* =======================
    SCORE
-========================= */
-
+======================= */
 function drawScore(){
-    let perfect = nodes.length-1;
-    let current = connections.length;
+    const perfect=nodes.length-1;
+    const current=lines.length;
 
     ctx.fillStyle="rgba(0,0,0,0.3)";
-    ctx.fillRect(10,10,150,50);
+    ctx.fillRect(10,10,150,45);
 
     ctx.fillStyle="#fff";
     ctx.font="14px Arial";
-    ctx.fillText("Score: "+current,20,30);
-    ctx.fillText("Perfect: "+perfect,20,50);
+    ctx.fillText("Score: "+current,20,28);
+    ctx.fillText("Perfect: "+perfect,20,45);
 }
 
-/* =========================
+/* =======================
    LOOP
-========================= */
-
+======================= */
 function loop(){
-    drawBackground();
-    drawConnections();
+    drawBG();
+    drawLines();
     drawNodes();
     drawScore();
     requestAnimationFrame(loop);
 }
 
-/* =========================
+/* =======================
    START
-========================= */
-
-generateNodes();
+======================= */
+generate();
 loop();
