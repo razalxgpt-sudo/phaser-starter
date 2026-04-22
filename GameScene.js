@@ -8,33 +8,91 @@ create() {
 
     this.isMobile = this.sys.game.device.input.touch;
 
-    this.drawGrid();
-
     this.nodes = [];
     this.links = [];
     this.selectedNode = null;
 
+    this.drawGrid();
+
+    // CAMERA PAN
+    this.isPanning = false;
+
+    this.input.on("pointerdown", (pointer, currentlyOver) => {
+
+        if (currentlyOver.length === 0) {
+            this.isPanning = true;
+            this.panStartX = pointer.x;
+            this.panStartY = pointer.y;
+            this.camStartX = this.cameras.main.scrollX;
+            this.camStartY = this.cameras.main.scrollY;
+
+            this.createNode(pointer.worldX, pointer.worldY);
+        }
+    });
+
+    this.input.on("pointerup", () => {
+        this.isPanning = false;
+    });
+
+    this.input.on("pointermove", (pointer) => {
+
+        if (!this.isPanning) return;
+
+        const cam = this.cameras.main;
+
+        cam.scrollX = this.camStartX - (pointer.x - this.panStartX) / cam.zoom;
+        cam.scrollY = this.camStartY - (pointer.y - this.panStartY) / cam.zoom;
+    });
+
+    // ZOOM scroll desktop
+    this.input.on("wheel", (pointer, gameObjects, deltaX, deltaY) => {
+
+        const cam = this.cameras.main;
+        cam.zoom -= deltaY * 0.001;
+
+        cam.zoom = Phaser.Math.Clamp(cam.zoom, 0.3, 2);
+    });
+
+    // PINCH ZOOM mobile
+    this.input.on('pointermove', (pointer) => {
+
+        if (this.input.pointer1.isDown && this.input.pointer2.isDown) {
+
+            const p1 = this.input.pointer1;
+            const p2 = this.input.pointer2;
+
+            const dist = Phaser.Math.Distance.Between(p1.x, p1.y, p2.x, p2.y);
+
+            if (!this.prevDist) this.prevDist = dist;
+
+            const diff = dist - this.prevDist;
+
+            const cam = this.cameras.main;
+            cam.zoom += diff * 0.005;
+
+            cam.zoom = Phaser.Math.Clamp(cam.zoom, 0.3, 2);
+
+            this.prevDist = dist;
+        }
+    });
+
+    this.input.on('pointerup', () => {
+        this.prevDist = null;
+    });
+
+    // DRAG NODES
     this.input.on("drag", (pointer, gameObject, dragX, dragY) => {
         gameObject.x = dragX;
         gameObject.y = dragY;
         this.redrawLinks();
     });
 
-    this.input.on("pointerdown", (pointer, currentlyOver) => {
-
-        if (currentlyOver.length > 0) return;
-
-        this.createNode(pointer.x, pointer.y);
-    });
-
     this.add.text(10, 10,
-        this.isMobile ?
-        "Tap = node | Hold+drag = move" :
-        "Click = node | Drag = move | Click node->node = connect",
+        "Click/Tap = node | Drag node = move | Drag empty = pan | Scroll/Pinch = zoom",
     {
         fontSize: "14px",
         fill: "#888888"
-    });
+    }).setScrollFactor(0);
 
 }
 
@@ -43,19 +101,17 @@ drawGrid() {
     const graphics = this.add.graphics();
     graphics.lineStyle(1, 0x222222, 1);
 
-    const width = this.cameras.main.width;
-    const height = this.cameras.main.height;
-
     const size = 40;
+    const range = 5000;
 
-    for (let x = 0; x < width; x += size) {
-        graphics.moveTo(x, 0);
-        graphics.lineTo(x, height);
+    for (let x = -range; x < range; x += size) {
+        graphics.moveTo(x, -range);
+        graphics.lineTo(x, range);
     }
 
-    for (let y = 0; y < height; y += size) {
-        graphics.moveTo(0, y);
-        graphics.lineTo(width, y);
+    for (let y = -range; y < range; y += size) {
+        graphics.moveTo(-range, y);
+        graphics.lineTo(range, y);
     }
 
     graphics.strokePath();
