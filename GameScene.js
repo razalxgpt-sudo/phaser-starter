@@ -10,15 +10,22 @@ create() {
 
     this.nodes = [];
 
-    this.input.on("pointerdown", (pointer) => {
+    // creare nod la click
+    this.input.on("pointerdown", (pointer, currentlyOver) => {
 
-        // nu crea nod dacă dai click pe unul existent
-        if (pointer.wasTouch) return;
+        // dacă dai click pe nod existent nu crea altul
+        if (currentlyOver.length > 0) return;
 
         this.createNode(pointer.x, pointer.y);
     });
 
-    this.add.text(10, 10, "Click to create nodes | Drag to move", {
+    // DRAG GLOBAL (corect)
+    this.input.on("drag", (pointer, gameObject, dragX, dragY) => {
+        gameObject.x = dragX;
+        gameObject.y = dragY;
+    });
+
+    this.add.text(10, 10, "Click = node | Drag = move", {
         fontSize: "16px",
         fill: "#888888"
     });
@@ -53,14 +60,8 @@ createNode(x, y) {
     const circle = this.add.circle(x, y, 12, 0x00ffcc);
     circle.setStrokeStyle(2, 0xffffff);
 
-    circle.setInteractive({ draggable: true });
-
+    circle.setInteractive();
     this.input.setDraggable(circle);
-
-    this.input.on("drag", (pointer, gameObject, dragX, dragY) => {
-        gameObject.x = dragX;
-        gameObject.y = dragY;
-    });
 
     this.nodes.push(circle);
 }
