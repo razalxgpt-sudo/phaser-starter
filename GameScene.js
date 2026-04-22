@@ -7,11 +7,14 @@ super("GameScene");
 create(){
 
 this.connections = [];
-this.dragLine = null;
 this.selectedNode = null;
 
 this.createBackground();
 this.createNodes();
+
+this.graphics = this.add.graphics();
+this.tempGraphics = this.add.graphics();
+
 this.enableInteraction();
 
 }
@@ -26,8 +29,8 @@ this.cameras.main.setBackgroundColor("#020617");
 
 createNodes(){
 
-const count = 5;
 this.nodes = [];
+const count = 5;
 
 for(let i=0;i<count;i++){
 
@@ -93,32 +96,24 @@ const p = pointer.positionToCamera(this.cameras.main);
 const node = this.getNodeAt(p.x,p.y);
 
 if(node){
-
 this.selectedNode = node;
-
-this.dragLine = this.add.line(
-0,0,
-node.x,node.y,
-p.x,p.y,
-0xffffff
-).setLineWidth(3);
-
 }
 
 });
 
 this.input.on("pointermove",(pointer)=>{
 
-if(!this.dragLine) return;
+if(!this.selectedNode) return;
 
 const p = pointer.positionToCamera(this.cameras.main);
 
-this.dragLine.setTo(
-this.selectedNode.x,
-this.selectedNode.y,
-p.x,
-p.y
-);
+this.tempGraphics.clear();
+this.tempGraphics.lineStyle(3,0x00bcd4);
+
+this.tempGraphics.beginPath();
+this.tempGraphics.moveTo(this.selectedNode.x,this.selectedNode.y);
+this.tempGraphics.lineTo(p.x,p.y);
+this.tempGraphics.strokePath();
 
 });
 
@@ -127,19 +122,14 @@ this.input.on("pointerup",(pointer)=>{
 if(!this.selectedNode) return;
 
 const p = pointer.positionToCamera(this.cameras.main);
-
 const target = this.getNodeAt(p.x,p.y);
 
 if(target && target !== this.selectedNode){
 this.createConnection(this.selectedNode,target);
 }
 
-if(this.dragLine){
-this.dragLine.destroy();
-this.dragLine=null;
-}
-
-this.selectedNode=null;
+this.tempGraphics.clear();
+this.selectedNode = null;
 
 });
 
@@ -167,14 +157,14 @@ return null;
 
 createConnection(a,b){
 
-const line = this.add.line(
-0,0,
-a.x,a.y,
-b.x,b.y,
-0x00bcd4
-).setLineWidth(3);
+this.graphics.lineStyle(3,0x00bcd4);
 
-this.connections.push({a,b,line});
+this.graphics.beginPath();
+this.graphics.moveTo(a.x,a.y);
+this.graphics.lineTo(b.x,b.y);
+this.graphics.strokePath();
+
+this.connections.push({a,b});
 
 a.connected=true;
 b.connected=true;
@@ -190,11 +180,4 @@ for(let node of this.nodes){
 if(!node.connected){
 node.alpha = 0.7 + Math.sin(this.time.now/300)*0.3;
 }else{
-node.alpha = 1;
-}
-
-}
-
-}
-
-}
+node
