@@ -5,15 +5,15 @@ super("GameScene");
 
 create() {
 
-this.applyAdaptiveBackground();
+this.createAdaptiveBackground();
 
-/* restul codului tau existent rămâne aici */
+/* codul tău existent pentru joc rămâne aici */
 
 }
 
-/* ---------- BACKGROUND SYSTEM ---------- */
+/* ---------------- BACKGROUND SYSTEM ---------------- */
 
-applyAdaptiveBackground() {
+createAdaptiveBackground() {
 
 const palettes = {
 
@@ -46,16 +46,17 @@ relaxed: [
 const difficulty = window.playerDifficulty || "normal";
 const palette = Phaser.Utils.Array.GetRandom(palettes[difficulty]);
 
-this.createGradient(palette[0], palette[1]);
+this.drawGradient(palette[0], palette[1]);
 
 }
 
-createGradient(topColor, bottomColor) {
+drawGradient(topColor, bottomColor) {
 
 const width = this.scale.width;
 const height = this.scale.height;
 
 const graphics = this.add.graphics();
+graphics.setDepth(-1000);
 
 const color1 = Phaser.Display.Color.ValueToColor(topColor);
 const color2 = Phaser.Display.Color.ValueToColor(bottomColor);
