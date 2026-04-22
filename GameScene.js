@@ -5,7 +5,7 @@ super("GameScene");
 
 create() {
 
-this.createAdaptiveBackground();
+this.colors = this.createAdaptiveBackground();
 
 this.nodes = [];
 this.lines = [];
@@ -24,32 +24,34 @@ createAdaptiveBackground() {
 
 const palettes = {
 
-very_easy: [
-[0x1e3a8a, 0x60a5fa],
-[0x065f46, 0x34d399]
-],
+very_easy: {
+bg: [[0x1e3a8a,0x60a5fa],[0x065f46,0x34d399]],
+node: [0xffd166,0xffadad,0xcaffbf]
+},
 
-easy: [
-[0x0f172a, 0x334155],
-[0x111827, 0x374151]
-],
+easy: {
+bg: [[0x0f172a,0x334155],[0x111827,0x374151]],
+node: [0x90dbf4,0xf1fa8c,0xffb703]
+},
 
-normal: [
-[0x020617, 0x0f172a],
-[0x030712, 0x111827]
-],
+normal: {
+bg: [[0x020617,0x0f172a],[0x030712,0x111827]],
+node: [0x00f5d4,0xffbe0b,0xfb5607]
+},
 
-relaxed: [
-[0x1c1917, 0x44403c],
-[0x1f2933, 0x4b5563]
-]
+relaxed: {
+bg: [[0x1c1917,0x44403c],[0x1f2933,0x4b5563]],
+node: [0xa7c957,0xfcbf49,0x90dbf4]
+}
 
 };
 
 const difficulty = window.playerDifficulty || "normal";
-const palette = Phaser.Utils.Array.GetRandom(palettes[difficulty]);
+const pack = Phaser.Utils.Array.GetRandom(palettes[difficulty].bg);
 
-this.drawGradient(palette[0], palette[1]);
+this.drawGradient(pack[0], pack[1]);
+
+return palettes[difficulty].node;
 
 }
 
@@ -68,20 +70,20 @@ for (let i = 0; i < height; i++) {
 
 const t = i / height;
 
-const r = Phaser.Math.Interpolation.Linear([color1.red, color2.red], t);
-const g = Phaser.Math.Interpolation.Linear([color1.green, color2.green], t);
-const b = Phaser.Math.Interpolation.Linear([color1.blue, color2.blue], t);
+const r = Phaser.Math.Interpolation.Linear([color1.red,color2.red], t);
+const g = Phaser.Math.Interpolation.Linear([color1.green,color2.green], t);
+const b = Phaser.Math.Interpolation.Linear([color1.blue,color2.blue], t);
 
-const color = Phaser.Display.Color.GetColor(r, g, b);
+const color = Phaser.Display.Color.GetColor(r,g,b);
 
-graphics.fillStyle(color, 1);
-graphics.fillRect(0, i, width, 1);
-
-}
+graphics.fillStyle(color,1);
+graphics.fillRect(0,i,width,1);
 
 }
 
-/* ---------- GAME LOGIC ---------- */
+}
+
+/* ---------- GAME ---------- */
 
 createNodes() {
 
@@ -91,9 +93,12 @@ const height = this.scale.height;
 for (let i = 0; i < 5; i++) {
 
 const x = Phaser.Math.Between(100, width - 100);
-const y = Phaser.Math.Between(100, height - 100);
+const y = Phaser.Math.Between(120, height - 120);
 
-const node = this.add.circle(x, y, 15, 0xffffff)
+const color = Phaser.Utils.Array.GetRandom(this.colors);
+
+const node = this.add.circle(x, y, 18, color)
+.setStrokeStyle(2, 0xffffff)
 .setInteractive();
 
 this.nodes.push(node);
@@ -113,7 +118,7 @@ node.x,
 node.y
 );
 
-if (dist < 20) {
+if (dist < 22) {
 this.selectedNode = node;
 }
 
@@ -134,7 +139,7 @@ node.x,
 node.y
 );
 
-if (dist < 20 && node !== this.selectedNode) {
+if (dist < 22 && node !== this.selectedNode) {
 
 const line = this.add.line(
 0,0,
@@ -146,6 +151,7 @@ node.y,
 );
 
 line.setOrigin(0,0);
+line.setLineWidth(3);
 this.lines.push(line);
 
 }
