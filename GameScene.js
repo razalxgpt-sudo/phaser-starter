@@ -1,184 +1,79 @@
 class GameScene extends Phaser.Scene {
-
 constructor() {
-    super("GameScene");
+super("GameScene");
 }
 
 create() {
 
-    this.isMobile = this.sys.game.device.input.touch;
+this.applyAdaptiveBackground();
 
-    this.nodes = [];
-    this.links = [];
-    this.selectedNode = null;
-
-    this.drawGrid();
-
-    // CAMERA PAN
-    this.isPanning = false;
-
-    this.input.on("pointerdown", (pointer, currentlyOver) => {
-
-        if (currentlyOver.length === 0) {
-            this.isPanning = true;
-            this.panStartX = pointer.x;
-            this.panStartY = pointer.y;
-            this.camStartX = this.cameras.main.scrollX;
-            this.camStartY = this.cameras.main.scrollY;
-
-            this.createNode(pointer.worldX, pointer.worldY);
-        }
-    });
-
-    this.input.on("pointerup", () => {
-        this.isPanning = false;
-    });
-
-    this.input.on("pointermove", (pointer) => {
-
-        if (!this.isPanning) return;
-
-        const cam = this.cameras.main;
-
-        cam.scrollX = this.camStartX - (pointer.x - this.panStartX) / cam.zoom;
-        cam.scrollY = this.camStartY - (pointer.y - this.panStartY) / cam.zoom;
-    });
-
-    // ZOOM scroll desktop
-    this.input.on("wheel", (pointer, gameObjects, deltaX, deltaY) => {
-
-        const cam = this.cameras.main;
-        cam.zoom -= deltaY * 0.001;
-
-        cam.zoom = Phaser.Math.Clamp(cam.zoom, 0.3, 2);
-    });
-
-    // PINCH ZOOM mobile
-    this.input.on('pointermove', (pointer) => {
-
-        if (this.input.pointer1.isDown && this.input.pointer2.isDown) {
-
-            const p1 = this.input.pointer1;
-            const p2 = this.input.pointer2;
-
-            const dist = Phaser.Math.Distance.Between(p1.x, p1.y, p2.x, p2.y);
-
-            if (!this.prevDist) this.prevDist = dist;
-
-            const diff = dist - this.prevDist;
-
-            const cam = this.cameras.main;
-            cam.zoom += diff * 0.005;
-
-            cam.zoom = Phaser.Math.Clamp(cam.zoom, 0.3, 2);
-
-            this.prevDist = dist;
-        }
-    });
-
-    this.input.on('pointerup', () => {
-        this.prevDist = null;
-    });
-
-    // DRAG NODES
-    this.input.on("drag", (pointer, gameObject, dragX, dragY) => {
-        gameObject.x = dragX;
-        gameObject.y = dragY;
-        this.redrawLinks();
-    });
-
-    this.add.text(10, 10,
-        "Click/Tap = node | Drag node = move | Drag empty = pan | Scroll/Pinch = zoom",
-    {
-        fontSize: "14px",
-        fill: "#888888"
-    }).setScrollFactor(0);
+/* restul codului tau existent rămâne aici */
 
 }
 
-drawGrid() {
+/* ---------- BACKGROUND SYSTEM ---------- */
 
-    const graphics = this.add.graphics();
-    graphics.lineStyle(1, 0x222222, 1);
+applyAdaptiveBackground() {
 
-    const size = 40;
-    const range = 5000;
+const palettes = {
 
-    for (let x = -range; x < range; x += size) {
-        graphics.moveTo(x, -range);
-        graphics.lineTo(x, range);
-    }
+very_easy: [
+[0x1e3a8a, 0x60a5fa],
+[0x065f46, 0x34d399],
+[0x7c3aed, 0xa78bfa]
+],
 
-    for (let y = -range; y < range; y += size) {
-        graphics.moveTo(-range, y);
-        graphics.lineTo(range, y);
-    }
+easy: [
+[0x0f172a, 0x334155],
+[0x111827, 0x374151],
+[0x0b132b, 0x1c2541]
+],
 
-    graphics.strokePath();
+normal: [
+[0x020617, 0x0f172a],
+[0x030712, 0x111827],
+[0x020617, 0x020617]
+],
+
+relaxed: [
+[0x1c1917, 0x44403c],
+[0x1f2933, 0x4b5563],
+[0x1e293b, 0x475569]
+]
+
+};
+
+const difficulty = window.playerDifficulty || "normal";
+const palette = Phaser.Utils.Array.GetRandom(palettes[difficulty]);
+
+this.createGradient(palette[0], palette[1]);
+
 }
 
-createNode(x, y) {
+createGradient(topColor, bottomColor) {
 
-    const radius = this.isMobile ? 22 : 12;
+const width = this.scale.width;
+const height = this.scale.height;
 
-    const circle = this.add.circle(x, y, radius, 0x00ffcc);
-    circle.setStrokeStyle(2, 0xffffff);
+const graphics = this.add.graphics();
 
-    circle.setInteractive(
-        new Phaser.Geom.Circle(0, 0, radius + 10),
-        Phaser.Geom.Circle.Contains
-    );
+const color1 = Phaser.Display.Color.ValueToColor(topColor);
+const color2 = Phaser.Display.Color.ValueToColor(bottomColor);
 
-    this.input.setDraggable(circle);
+for (let i = 0; i < height; i++) {
 
-    circle.on("pointerdown", () => {
-        this.handleNodeClick(circle);
-    });
+const t = i / height;
 
-    this.nodes.push(circle);
+const r = Phaser.Math.Interpolation.Linear([color1.red, color2.red], t);
+const g = Phaser.Math.Interpolation.Linear([color1.green, color2.green], t);
+const b = Phaser.Math.Interpolation.Linear([color1.blue, color2.blue], t);
+
+const color = Phaser.Display.Color.GetColor(r, g, b);
+
+graphics.fillStyle(color, 1);
+graphics.fillRect(0, i, width, 1);
+
 }
 
-handleNodeClick(node) {
-
-    if (this.selectedNode === null) {
-        this.selectedNode = node;
-        node.setFillStyle(0xffff00);
-        return;
-    }
-
-    if (this.selectedNode === node) {
-        node.setFillStyle(0x00ffcc);
-        this.selectedNode = null;
-        return;
-    }
-
-    this.createLink(this.selectedNode, node);
-
-    this.selectedNode.setFillStyle(0x00ffcc);
-    this.selectedNode = null;
 }
-
-createLink(a, b) {
-
-    const line = this.add.line(0, 0, a.x, a.y, b.x, b.y, 0x8888ff)
-        .setOrigin(0, 0)
-        .setLineWidth(2);
-
-    this.links.push({ a, b, line });
-}
-
-redrawLinks() {
-
-    this.links.forEach(link => {
-        link.line.setTo(
-            link.a.x,
-            link.a.y,
-            link.b.x,
-            link.b.y
-        );
-    });
-}
-
-update() {}
-
 }
