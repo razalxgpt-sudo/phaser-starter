@@ -1,7 +1,5 @@
-class LogicPuzzle {
-    constructor(scene){
-        this.scene = scene;
-    }
-
-    start(){}
+const UI = {
+init() {
+console.log("UI init");
 }
+};
