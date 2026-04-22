@@ -8,10 +8,16 @@ create() {
 
     this.drawGrid();
 
-    this.add.text(400, 300, "MindFlow Running", {
-        fontSize: "32px",
-        fill: "#ffffff"
-    }).setOrigin(0.5);
+    this.nodes = [];
+
+    this.input.on("pointerdown", (pointer) => {
+        this.createNode(pointer.x, pointer.y);
+    });
+
+    this.add.text(10, 10, "Click to create nodes", {
+        fontSize: "16px",
+        fill: "#888888"
+    });
 
 }
 
@@ -36,6 +42,14 @@ drawGrid() {
     }
 
     graphics.strokePath();
+}
+
+createNode(x, y) {
+
+    const circle = this.add.circle(x, y, 12, 0x00ffcc);
+    circle.setStrokeStyle(2, 0xffffff);
+
+    this.nodes.push(circle);
 }
 
 update() {
