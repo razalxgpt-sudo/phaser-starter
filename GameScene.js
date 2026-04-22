@@ -1,388 +1,204 @@
 class GameScene extends Phaser.Scene {
-constructor() {
-super("GameScene");
+    constructor() {
+        super("GameScene");
+    }
 
-this.nodes = [];
-this.edges = [];
-this.history = [];
+    create() {
+
+        this.nodes = [];
+        this.connections = [];
+        this.lines = [];
+
+        this.activeNode = null;
 
-this.startNode = null;
-this.currentLine = null;
+        this.drawBackground();
 
-this.level = 1;
+        this.generateNodes(6); // test
 
-this.nodeRadius = 60; // MARE pentru mobil
-this.hitRadius = 90;  // EXTRA mare pentru touch
+        this.input.on("pointerdown", this.onPointerDown, this);
+        this.input.on("pointermove", this.onPointerMove, this);
+        this.input.on("pointerup", this.onPointerUp, this);
+    }
 
-this.symbols = ["▲","●","■","◆","★","✚","⬟","⬢","⬣","✦","✿","☀"];
-}
+    /* ---------------- BACKGROUND ---------------- */
 
-create() {
+    drawBackground() {
+        const g = this.add.graphics();
+        const w = this.scale.width;
+        const h = this.scale.height;
 
-this.scale.refresh();
+        for (let i = 0; i < h; i++) {
+            const t = i / h;
+            const color = Phaser.Display.Color.GetColor(
+                200 - 50 * t,
+                210 - 60 * t,
+                180 - 40 * t
+            );
+            g.fillStyle(color, 1);
+            g.fillRect(0, i, w, 1);
+        }
+    }
 
-this.createBackground();
+    /* ---------------- NODE GENERATION ---------------- */
 
-this.lineGraphics = this.add.graphics().setDepth(2);
+    generateNodes(count) {
 
-this.createNodes();
-this.enableInput();
-this.createUI();
+        const w = this.scale.width;
+        const h = this.scale.height;
 
-this.computeMST();
+        const radius = Math.max(40, Math.min(w, h) * 0.06); // 🔥 FIX: mare pe mobil
 
-}
+        let attempts = 0;
 
-/* ---------------- BACKGROUND ---------------- */
+        while (this.nodes.length < count && attempts < 500) {
+            attempts++;
 
-createBackground(){
+            let x = Phaser.Math.Between(radius, w - radius);
+            let y = Phaser.Math.Between(radius, h - radius);
 
-let g = this.add.graphics().setDepth(-1000);
-let w=this.scale.width, h=this.scale.height;
+            let ok = true;
 
-for(let i=0;i<h;i++){
-let t=i/h;
-let c = Phaser.Display.Color.GetColor(
-240 - t*60,
-240 - t*40,
-255 - t*80
-);
-g.fillStyle(c,1);
-g.fillRect(0,i,w,1);
-}
+            for (let n of this.nodes) {
+                let d = Phaser.Math.Distance.Between(x, y, n.x, n.y);
+                if (d < radius * 2.5) {
+                    ok = false;
+                    break;
+                }
+            }
 
-}
+            if (!ok) continue;
 
-/* ---------------- NODES ---------------- */
+            let circle = this.add.circle(x, y, radius, 0xffffff);
+            circle.setStrokeStyle(4, 0x333333);
 
-createNodes(){
+            // simbol
+            let symbol = this.getRandomSymbol();
+            let text = this.add.text(x, y, symbol, {
+                fontSize: radius + "px",
+                color: "#000"
+            }).setOrigin(0.5);
 
-this.nodes=[];
-this.edges=[];
-this.history=[];
+            this.nodes.push({
+                x,
+                y,
+                radius,
+                circle,
+                text,
+                connections: []
+            });
+        }
+    }
 
-let count = Math.min(4 + this.level, 10);
+    getRandomSymbol() {
+        const symbols = ["●", "▲", "■"];
+        return Phaser.Utils.Array.GetRandom(symbols);
+    }
 
-let w=this.scale.width;
-let h=this.scale.height;
+    /* ---------------- INPUT ---------------- */
 
-let tries=0;
+    getPointerWorld(pointer) {
+        // 🔥 FIX CRITIC: coordonate corecte mobil
+        const rect = this.game.canvas.getBoundingClientRect();
 
-while(this.nodes.length < count && tries < 2000){
+        return {
+            x: (pointer.clientX - rect.left) * (this.scale.width / rect.width),
+            y: (pointer.clientY - rect.top) * (this.scale.height / rect.height)
+        };
+    }
 
-tries++;
+    getNodeAt(x, y) {
+        for (let node of this.nodes) {
 
-let x = Phaser.Math.Between(120, w-120);
-let y = Phaser.Math.Between(180, h-120);
+            let dist = Phaser.Math.Distance.Between(x, y, node.x, node.y);
 
-let ok=true;
+            // 🔥 SNAP PE MARGINE (nu centru)
+            if (dist <= node.radius + 20) { // toleranță mare pt mobil
+                return node;
+            }
+        }
+        return null;
+    }
 
-for(let n of this.nodes){
-if(Phaser.Math.Distance.Between(x,y,n.x,n.y) < this.nodeRadius*2.2)
-ok=false;
-}
+    onPointerDown(pointer) {
 
-if(!ok) continue;
+        const pos = this.getPointerWorld(pointer);
+        const node = this.getNodeAt(pos.x, pos.y);
 
-let node = this.add.circle(x,y,this.nodeRadius,0xffffff)
-.setStrokeStyle(5,0x000000);
+        if (!node) return;
 
-let txt = this.add.text(x,y,this.symbols[this.nodes.length],{
-fontSize:(this.nodeRadius)+"px",
-color:"#000"
-}).setOrigin(0.5);
+        this.activeNode = node;
 
-node.label = txt;
+        this.tempLine = this.add.graphics();
+        this.tempLine.lineStyle(6, 0xff9900, 1);
+    }
 
-this.nodes.push(node);
-}
+    onPointerMove(pointer) {
 
-/* pulse */
-this.tweens.add({
-targets:this.nodes,
-scale:1.08,
-duration:800,
-yoyo:true,
-repeat:-1
-});
+        if (!this.activeNode || !this.tempLine) return;
 
-}
+        const pos = this.getPointerWorld(pointer);
 
-/* ---------------- INPUT FIX REAL ---------------- */
+        this.tempLine.clear();
+        this.tempLine.lineStyle(6, 0xff9900, 1);
 
-enableInput(){
+        this.tempLine.beginPath();
+        this.tempLine.moveTo(this.activeNode.x, this.activeNode.y);
+        this.tempLine.lineTo(pos.x, pos.y);
+        this.tempLine.strokePath();
+    }
 
-this.input.on("pointerdown",(p)=>{
+    onPointerUp(pointer) {
 
-let {x,y} = p;
+        if (!this.activeNode) return;
 
-let n = this.getNode(x,y);
-if(!n) return;
+        const pos = this.getPointerWorld(pointer);
+        const target = this.getNodeAt(pos.x, pos.y);
 
-this.startNode = n;
+        if (target && target !== this.activeNode) {
 
-this.currentLine = {
-x1:n.x,
-y1:n.y,
-x2:x,
-y2:y
-};
+            if (!this.connectionExists(this.activeNode, target)) {
 
-});
+                // 🔥 SNAP EXACT LA MARGINE (nu centru)
+                const angle = Phaser.Math.Angle.Between(
+                    this.activeNode.x,
+                    this.activeNode.y,
+                    target.x,
+                    target.y
+                );
 
-this.input.on("pointermove",(p)=>{
+                const startX = this.activeNode.x + Math.cos(angle) * this.activeNode.radius;
+                const startY = this.activeNode.y + Math.sin(angle) * this.activeNode.radius;
 
-if(!this.currentLine) return;
+                const endX = target.x - Math.cos(angle) * target.radius;
+                const endY = target.y - Math.sin(angle) * target.radius;
 
-this.currentLine.x2 = p.x;
-this.currentLine.y2 = p.y;
+                const line = this.add.graphics();
+                line.lineStyle(6, 0xff9900, 1);
+                line.beginPath();
+                line.moveTo(startX, startY);
+                line.lineTo(endX, endY);
+                line.strokePath();
 
-this.draw();
+                this.connections.push({
+                    a: this.activeNode,
+                    b: target,
+                    line
+                });
+            }
+        }
 
-});
+        if (this.tempLine) {
+            this.tempLine.destroy();
+            this.tempLine = null;
+        }
 
-this.input.on("pointerup",(p)=>{
+        this.activeNode = null;
+    }
 
-if(!this.currentLine) return;
-
-let target = this.getNode(p.x,p.y);
-
-if(target && target !== this.startNode){
-
-if(!this.edgeExists(this.startNode,target)){
-
-let edge = this.makeEdge(this.startNode,target);
-
-/* IMPORTANT: NU blocăm decât intersecțiile reale */
-if(!this.intersects(edge)){
-this.edges.push(edge);
-this.history.push(edge);
-}
-
-}
-
-}
-
-this.currentLine = null;
-this.startNode = null;
-
-this.draw();
-this.checkWin();
-
-});
-
-this.input.keyboard.on("keydown-Z",()=>this.undo());
-
-}
-
-/* ---------------- EDGE ---------------- */
-
-makeEdge(a,b){
-
-let ang = Phaser.Math.Angle.Between(a.x,a.y,b.x,b.y);
-
-return {
-a,b,
-x1:a.x + Math.cos(ang)*this.nodeRadius,
-y1:a.y + Math.sin(ang)*this.nodeRadius,
-x2:b.x - Math.cos(ang)*this.nodeRadius,
-y2:b.y - Math.sin(ang)*this.nodeRadius,
-cost:Phaser.Math.Distance.Between(a.x,a.y,b.x,b.y)
-};
-
-}
-
-edgeExists(a,b){
-return this.edges.some(e =>
-(e.a===a && e.b===b)||(e.a===b && e.b===a)
-);
-}
-
-/* ---------------- HIT FIX ---------------- */
-
-getNode(x,y){
-
-for(let n of this.nodes){
-if(Phaser.Math.Distance.Between(x,y,n.x,n.y) < this.hitRadius)
-return n;
-}
-return null;
-
-}
-
-/* ---------------- INTERSECTION ---------------- */
-
-intersects(ne){
-
-for(let e of this.edges){
-if(this.cross(ne,e)) return true;
-}
-return false;
-
-}
-
-cross(a,b){
-
-function ccw(A,B,C){
-return (C.y-A.y)*(B.x-A.x) > (B.y-A.y)*(C.x-A.x);
-}
-
-let A={x:a.x1,y:a.y1}, B={x:a.x2,y:a.y2};
-let C={x:b.x1,y:b.y1}, D={x:b.x2,y:b.y2};
-
-return (ccw(A,C,D)!=ccw(B,C,D)) && (ccw(A,B,C)!=ccw(A,B,D));
-
-}
-
-/* ---------------- MST ---------------- */
-
-computeMST(){
-
-let all=[];
-
-for(let i=0;i<this.nodes.length;i++){
-for(let j=i+1;j<this.nodes.length;j++){
-
-let a=this.nodes[i], b=this.nodes[j];
-
-all.push({
-a,b,
-cost:Phaser.Math.Distance.Between(a.x,a.y,b.x,b.y)
-});
-}
-}
-
-all.sort((a,b)=>a.cost-b.cost);
-
-let parent=new Map();
-this.nodes.forEach(n=>parent.set(n,n));
-
-function find(x){
-while(parent.get(x)!==x) x=parent.get(x);
-return x;
-}
-
-function union(a,b){
-parent.set(find(a),find(b));
-}
-
-let total=0;
-
-for(let e of all){
-
-let pa=find(e.a), pb=find(e.b);
-
-if(pa!==pb){
-union(pa,pb);
-total+=e.cost;
-}
-}
-
-this.perfectCost = total;
-
-}
-
-/* ---------------- WIN ---------------- */
-
-checkWin(){
-
-if(this.edges.length !== this.nodes.length-1) return;
-
-/* verific conectivitate */
-let visited=new Set();
-let stack=[this.nodes[0]];
-
-while(stack.length){
-let n=stack.pop();
-visited.add(n);
-
-this.edges.forEach(e=>{
-if(e.a===n && !visited.has(e.b)) stack.push(e.b);
-if(e.b===n && !visited.has(e.a)) stack.push(e.a);
-});
-}
-
-if(visited.size !== this.nodes.length) return;
-
-/* SCOR DOAR AICI */
-let total = this.edges.reduce((s,e)=>s+e.cost,0);
-let score = Math.floor((this.perfectCost/total)*100);
-
-this.add.text(
-this.scale.width/2,
-this.scale.height/2,
-"✔ NIVEL COMPLET\nScor: "+score,
-{
-fontSize:"42px",
-color:"#22c55e",
-align:"center"
-}
-).setOrigin(0.5);
-
-/* next level */
-this.time.delayedCall(2000,()=>{
-this.level++;
-this.scene.restart();
-});
-
-}
-
-/* ---------------- DRAW ---------------- */
-
-draw(){
-
-this.lineGraphics.clear();
-
-this.edges.forEach(e=>{
-this.lineGraphics.lineStyle(8,0x00e5ff);
-this.lineGraphics.strokeLineShape(
-new Phaser.Geom.Line(e.x1,e.y1,e.x2,e.y2)
-);
-});
-
-if(this.currentLine){
-this.lineGraphics.lineStyle(4,0xffffff,0.5);
-this.lineGraphics.strokeLineShape(
-new Phaser.Geom.Line(
-this.currentLine.x1,
-this.currentLine.y1,
-this.currentLine.x2,
-this.currentLine.y2
-));
-}
-
-}
-
-/* ---------------- UNDO ---------------- */
-
-undo(){
-
-let last=this.history.pop();
-if(!last) return;
-
-this.edges=this.edges.filter(e=>e!==last);
-this.draw();
-
-}
-
-/* ---------------- UI ---------------- */
-
-createUI(){
-
-this.add.text(10,10,
-"Leagă toate punctele\nfără linii care se intersectează",
-{
-fontSize:"20px",
-color:"#000"
-});
-
-let btn=this.add.text(
-this.scale.width-60,10,"↩",
-{fontSize:"32px",backgroundColor:"#ccc"}
-)
-.setInteractive()
-.on("pointerdown",()=>this.undo());
-
-}
-
+    connectionExists(a, b) {
+        return this.connections.some(c =>
+            (c.a === a && c.b === b) ||
+            (c.a === b && c.b === a)
+        );
+    }
 }
