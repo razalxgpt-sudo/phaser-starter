@@ -6,20 +6,32 @@ constructor() {
 
 create() {
 
+    this.isMobile = this.sys.game.device.input.touch;
+
     this.drawGrid();
 
     this.nodes = [];
     this.links = [];
     this.selectedNode = null;
 
-    // drag global
     this.input.on("drag", (pointer, gameObject, dragX, dragY) => {
         gameObject.x = dragX;
         gameObject.y = dragY;
         this.redrawLinks();
     });
 
-    this.add.text(10, 10, "Click empty = node | Drag = move | Click node->node = connect", {
+    this.input.on("pointerdown", (pointer, currentlyOver) => {
+
+        if (currentlyOver.length > 0) return;
+
+        this.createNode(pointer.x, pointer.y);
+    });
+
+    this.add.text(10, 10,
+        this.isMobile ?
+        "Tap = node | Hold+drag = move" :
+        "Click = node | Drag = move | Click node->node = connect",
+    {
         fontSize: "14px",
         fill: "#888888"
     });
@@ -51,10 +63,16 @@ drawGrid() {
 
 createNode(x, y) {
 
-    const circle = this.add.circle(x, y, 12, 0x00ffcc);
+    const radius = this.isMobile ? 22 : 12;
+
+    const circle = this.add.circle(x, y, radius, 0x00ffcc);
     circle.setStrokeStyle(2, 0xffffff);
 
-    circle.setInteractive();
+    circle.setInteractive(
+        new Phaser.Geom.Circle(0, 0, radius + 10),
+        Phaser.Geom.Circle.Contains
+    );
+
     this.input.setDraggable(circle);
 
     circle.on("pointerdown", () => {
@@ -105,19 +123,6 @@ redrawLinks() {
     });
 }
 
-update() {
-
-    // click pe empty space -> create node
-    if (this.input.activePointer.justDown) {
-
-        const pointer = this.input.activePointer;
-        const objects = this.input.hitTestPointer(pointer);
-
-        if (objects.length === 0) {
-            this.createNode(pointer.x, pointer.y);
-        }
-    }
-
-}
+update() {}
 
 }
