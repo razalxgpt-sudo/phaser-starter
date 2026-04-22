@@ -115,6 +115,20 @@ const node = this.add.circle(x,y,20,color)
 node.weight = weight;
 node.connected = false;
 
+/* FIXED NODES */
+node.fixed = (this.level > 5 && Phaser.Math.Between(0,100) < 30);
+
+/* REQUIRED NODES */
+node.required = (this.level > 3 && Phaser.Math.Between(0,100) < 40);
+
+if(node.fixed){
+node.setStrokeStyle(3,0xff0000);
+}
+
+if(node.required){
+node.setStrokeStyle(3,0xffff00);
+}
+
 const label = this.add.text(x,y,weight,{
 fontSize:"16px",
 color:"#000000"
@@ -176,6 +190,9 @@ this.selectedNode=null;
 
 createConnection(nodeA,nodeB){
 
+if(nodeA.fixed && nodeA.connected) return;
+if(nodeB.fixed && nodeB.connected) return;
+
 const baseDistance = Phaser.Math.Distance.Between(
 nodeA.x,nodeA.y,
 nodeB.x,nodeB.y
@@ -219,10 +236,8 @@ this.costText.setText("Cost: "+this.totalCost);
 }
 
 stopPulse(node){
-
 this.tweens.killTweensOf(node);
 node.setScale(1);
-
 }
 
 }
