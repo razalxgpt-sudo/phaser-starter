@@ -1,0 +1,1 @@
+// boot scene placeholder
