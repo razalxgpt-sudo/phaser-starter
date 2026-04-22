@@ -1,4 +1,3 @@
-// boot scene placeholder
 window.onload = function () {
 
 const config = {
@@ -9,6 +8,6 @@ backgroundColor: "#000000",
 scene: [BootScene, GameScene]
 };
 
-const game = new Phaser.Game(config);
+new Phaser.Game(config);
 
 };
