@@ -1,9 +1,5 @@
-class SaveManager {
-    static save(key,data){
-        localStorage.setItem(key,JSON.stringify(data));
-    }
-
-    static load(key){
-        return JSON.parse(localStorage.getItem(key));
-    }
+const Session = {
+start() {
+console.log("session start");
 }
+};
