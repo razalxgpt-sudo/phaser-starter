@@ -7,15 +7,14 @@ super("GameScene");
 create(){
 
 this.connections = [];
-this.selectedNode = null;
+this.graphics = this.add.graphics();
+this.tempGraphics = this.add.graphics();
 
 this.createBackground();
 this.createNodes();
 
-this.graphics = this.add.graphics();
-this.tempGraphics = this.add.graphics();
-
-this.enableInteraction();
+this.input.on("pointermove", this.onPointerMove, this);
+this.input.on("pointerup", this.onPointerUp, this);
 
 }
 
@@ -30,6 +29,8 @@ this.cameras.main.setBackgroundColor("#020617");
 createNodes(){
 
 this.nodes = [];
+this.selectedNode = null;
+
 const count = 5;
 
 for(let i=0;i<count;i++){
@@ -49,6 +50,12 @@ color:"#000"
 }).setOrigin(0.5);
 
 node.label = label;
+
+node.setInteractive();
+
+node.on("pointerdown",()=>{
+this.selectedNode = node;
+});
 
 this.nodes.push(node);
 
@@ -85,44 +92,29 @@ return{x,y};
 
 }
 
-/* INTERACTION */
+/* POINTER MOVE */
 
-enableInteraction(){
-
-this.input.on("pointerdown",(pointer)=>{
-
-const p = pointer.positionToCamera(this.cameras.main);
-
-const node = this.getNodeAt(p.x,p.y);
-
-if(node){
-this.selectedNode = node;
-}
-
-});
-
-this.input.on("pointermove",(pointer)=>{
+onPointerMove(pointer){
 
 if(!this.selectedNode) return;
-
-const p = pointer.positionToCamera(this.cameras.main);
 
 this.tempGraphics.clear();
 this.tempGraphics.lineStyle(3,0x00bcd4);
 
 this.tempGraphics.beginPath();
 this.tempGraphics.moveTo(this.selectedNode.x,this.selectedNode.y);
-this.tempGraphics.lineTo(p.x,p.y);
+this.tempGraphics.lineTo(pointer.x,pointer.y);
 this.tempGraphics.strokePath();
 
-});
+}
 
-this.input.on("pointerup",(pointer)=>{
+/* POINTER UP */
+
+onPointerUp(pointer){
 
 if(!this.selectedNode) return;
 
-const p = pointer.positionToCamera(this.cameras.main);
-const target = this.getNodeAt(p.x,p.y);
+const target = this.getNodeAt(pointer.x,pointer.y);
 
 if(target && target !== this.selectedNode){
 this.createConnection(this.selectedNode,target);
@@ -130,8 +122,6 @@ this.createConnection(this.selectedNode,target);
 
 this.tempGraphics.clear();
 this.selectedNode = null;
-
-});
 
 }
 
@@ -166,8 +156,8 @@ this.graphics.strokePath();
 
 this.connections.push({a,b});
 
-a.connected=true;
-b.connected=true;
+a.connected = true;
+b.connected = true;
 
 }
 
@@ -180,4 +170,11 @@ for(let node of this.nodes){
 if(!node.connected){
 node.alpha = 0.7 + Math.sin(this.time.now/300)*0.3;
 }else{
-node
+node.alpha = 1;
+}
+
+}
+
+}
+
+}
