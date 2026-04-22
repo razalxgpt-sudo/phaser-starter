@@ -6,28 +6,23 @@ this.nodes = [];
 this.edges = [];
 this.history = [];
 
-this.currentLine = null;
 this.startNode = null;
+this.currentLine = null;
 
 this.level = 1;
-this.maxNodes = 4;
 
-this.nodeRadius = 0;
-this.symbolSize = 0;
-
-this.score = 0;
-this.perfectCost = 0;
-
-this.ageGroup = this.detectAge();
+this.nodeRadius = 60; // MARE pentru mobil
+this.hitRadius = 90;  // EXTRA mare pentru touch
 
 this.symbols = ["▲","●","■","◆","★","✚","⬟","⬢","⬣","✦","✿","☀"];
 }
 
 create() {
 
-this.computeSizes();
+this.scale.refresh();
 
 this.createBackground();
+
 this.lineGraphics = this.add.graphics().setDepth(2);
 
 this.createNodes();
@@ -35,27 +30,6 @@ this.enableInput();
 this.createUI();
 
 this.computeMST();
-
-}
-
-/* ---------------- AGE ---------------- */
-
-detectAge(){
-return localStorage.getItem("ageGroup") || "child";
-}
-
-/* ---------------- SIZES ---------------- */
-
-computeSizes(){
-
-let w = window.innerWidth;
-let h = window.innerHeight;
-
-/* PE MOBIL creștem agresiv */
-this.nodeRadius = Math.floor(Math.min(w,h) / 8);
-this.nodeRadius = Phaser.Math.Clamp(this.nodeRadius, 40, 90);
-
-this.symbolSize = Math.floor(this.nodeRadius * 0.8);
 
 }
 
@@ -68,10 +42,11 @@ let w=this.scale.width, h=this.scale.height;
 
 for(let i=0;i<h;i++){
 let t=i/h;
-let r=200 - t*50;
-let gcol=220 - t*80;
-let b=255 - t*120;
-let c = Phaser.Display.Color.GetColor(r,gcol,b);
+let c = Phaser.Display.Color.GetColor(
+240 - t*60,
+240 - t*40,
+255 - t*80
+);
 g.fillStyle(c,1);
 g.fillRect(0,i,w,1);
 }
@@ -83,117 +58,114 @@ g.fillRect(0,i,w,1);
 createNodes(){
 
 this.nodes=[];
+this.edges=[];
+this.history=[];
+
+let count = Math.min(4 + this.level, 10);
 
 let w=this.scale.width;
 let h=this.scale.height;
 
-this.maxNodes = Math.min(4 + this.level, 12);
-
 let tries=0;
 
-while(this.nodes.length < this.maxNodes && tries<2000){
+while(this.nodes.length < count && tries < 2000){
 
 tries++;
 
-let x=Phaser.Math.Between(100,w-100);
-let y=Phaser.Math.Between(150,h-100);
+let x = Phaser.Math.Between(120, w-120);
+let y = Phaser.Math.Between(180, h-120);
 
 let ok=true;
 
 for(let n of this.nodes){
-let d=Phaser.Math.Distance.Between(x,y,n.x,n.y);
-if(d < this.nodeRadius*2.5) ok=false;
+if(Phaser.Math.Distance.Between(x,y,n.x,n.y) < this.nodeRadius*2.2)
+ok=false;
 }
 
 if(!ok) continue;
 
-/* fără aliniere */
-let aligned = this.nodes.some(n =>
-Math.abs(n.x-x)<this.nodeRadius ||
-Math.abs(n.y-y)<this.nodeRadius
-);
-
-if(aligned) continue;
-
 let node = this.add.circle(x,y,this.nodeRadius,0xffffff)
 .setStrokeStyle(5,0x000000);
 
-if(this.ageGroup==="child"){
-let s = this.add.text(x,y,this.symbols[this.nodes.length],{
-fontSize:this.symbolSize+"px",
+let txt = this.add.text(x,y,this.symbols[this.nodes.length],{
+fontSize:(this.nodeRadius)+"px",
 color:"#000"
 }).setOrigin(0.5);
-node.label=s;
-}else{
-let value = Phaser.Math.Between(1,5);
-node.value=value;
-let s = this.add.text(x,y,value,{
-fontSize:this.symbolSize+"px",
-color:"#000"
-}).setOrigin(0.5);
-node.label=s;
-}
 
-node.connected=false;
+node.label = txt;
+
 this.nodes.push(node);
-
 }
 
 /* pulse */
 this.tweens.add({
 targets:this.nodes,
-scale:1.1,
-duration:700,
+scale:1.08,
+duration:800,
 yoyo:true,
 repeat:-1
 });
 
 }
 
-/* ---------------- INPUT ---------------- */
+/* ---------------- INPUT FIX REAL ---------------- */
 
 enableInput(){
 
 this.input.on("pointerdown",(p)=>{
-let n=this.getNode(p.x,p.y);
+
+let {x,y} = p;
+
+let n = this.getNode(x,y);
 if(!n) return;
 
-this.startNode=n;
-this.currentLine={x1:n.x,y1:n.y,x2:p.x,y2:p.y};
+this.startNode = n;
+
+this.currentLine = {
+x1:n.x,
+y1:n.y,
+x2:x,
+y2:y
+};
+
 });
 
 this.input.on("pointermove",(p)=>{
+
 if(!this.currentLine) return;
-this.currentLine.x2=p.x;
-this.currentLine.y2=p.y;
+
+this.currentLine.x2 = p.x;
+this.currentLine.y2 = p.y;
+
 this.draw();
+
 });
 
 this.input.on("pointerup",(p)=>{
 
 if(!this.currentLine) return;
 
-let t=this.getNode(p.x,p.y);
+let target = this.getNode(p.x,p.y);
 
-if(t && t!==this.startNode){
+if(target && target !== this.startNode){
 
-if(!this.edgeExists(this.startNode,t)){
+if(!this.edgeExists(this.startNode,target)){
 
-let e=this.makeEdge(this.startNode,t);
+let edge = this.makeEdge(this.startNode,target);
 
-if(!this.intersects(e)){
-this.edges.push(e);
-this.history.push(e);
+/* IMPORTANT: NU blocăm decât intersecțiile reale */
+if(!this.intersects(edge)){
+this.edges.push(edge);
+this.history.push(edge);
 }
 
 }
 
 }
 
-this.currentLine=null;
-this.startNode=null;
+this.currentLine = null;
+this.startNode = null;
 
-this.updateConnectivity();
 this.draw();
 this.checkWin();
 
@@ -209,15 +181,14 @@ makeEdge(a,b){
 
 let ang = Phaser.Math.Angle.Between(a.x,a.y,b.x,b.y);
 
-let x1=a.x+Math.cos(ang)*this.nodeRadius;
-let y1=a.y+Math.sin(ang)*this.nodeRadius;
-
-let x2=b.x-Math.cos(ang)*this.nodeRadius;
-let y2=b.y-Math.sin(ang)*this.nodeRadius;
-
-let cost=Phaser.Math.Distance.Between(a.x,a.y,b.x,b.y);
-
-return {a,b,x1,y1,x2,y2,cost};
+return {
+a,b,
+x1:a.x + Math.cos(ang)*this.nodeRadius,
+y1:a.y + Math.sin(ang)*this.nodeRadius,
+x2:b.x - Math.cos(ang)*this.nodeRadius,
+y2:b.y - Math.sin(ang)*this.nodeRadius,
+cost:Phaser.Math.Distance.Between(a.x,a.y,b.x,b.y)
+};
 
 }
 
@@ -227,116 +198,15 @@ return this.edges.some(e =>
 );
 }
 
-/* ---------------- MST ---------------- */
+/* ---------------- HIT FIX ---------------- */
 
-computeMST(){
+getNode(x,y){
 
-let allEdges=[];
-
-for(let i=0;i<this.nodes.length;i++){
-for(let j=i+1;j<this.nodes.length;j++){
-
-let a=this.nodes[i], b=this.nodes[j];
-let cost=Phaser.Math.Distance.Between(a.x,a.y,b.x,b.y);
-
-allEdges.push({a,b,cost});
+for(let n of this.nodes){
+if(Phaser.Math.Distance.Between(x,y,n.x,n.y) < this.hitRadius)
+return n;
 }
-}
-
-/* sort */
-allEdges.sort((a,b)=>a.cost-b.cost);
-
-/* union-find simplu */
-let parent=new Map();
-this.nodes.forEach(n=>parent.set(n,n));
-
-function find(x){
-while(parent.get(x)!==x) x=parent.get(x);
-return x;
-}
-
-function union(a,b){
-parent.set(find(a),find(b));
-}
-
-let mst=[];
-let total=0;
-
-for(let e of allEdges){
-
-let pa=find(e.a), pb=find(e.b);
-
-if(pa!==pb){
-union(pa,pb);
-mst.push(e);
-total+=e.cost;
-}
-
-}
-
-this.perfectCost=total;
-
-}
-
-/* ---------------- CONNECTIVITY ---------------- */
-
-updateConnectivity(){
-
-this.nodes.forEach(n=>n.connected=false);
-
-let stack=[this.nodes[0]];
-let visited=new Set();
-
-while(stack.length){
-let n=stack.pop();
-visited.add(n);
-
-this.edges.forEach(e=>{
-if(e.a===n && !visited.has(e.b)) stack.push(e.b);
-if(e.b===n && !visited.has(e.a)) stack.push(e.a);
-});
-}
-
-visited.forEach(n=>n.connected=true);
-
-}
-
-/* ---------------- WIN ---------------- */
-
-checkWin(){
-
-if(this.edges.length !== this.nodes.length-1) return;
-
-let all = this.nodes.every(n=>n.connected);
-if(!all) return;
-
-/* scor */
-let total = this.edges.reduce((s,e)=>s+e.cost,0);
-let ratio = this.perfectCost / total;
-this.score = Math.floor(ratio*100);
-
-this.showWin();
-
-}
-
-showWin(){
-
-this.add.text(
-this.scale.width/2,
-this.scale.height/2,
-"✔ NIVEL COMPLET\nScor: "+this.score,
-{
-fontSize:"40px",
-color:"#22c55e",
-align:"center"
-}
-).setOrigin(0.5);
-
-/* next level */
-this.time.delayedCall(2000,()=>{
-this.level++;
-this.scene.restart();
-});
+return null;
 
 }
 
@@ -364,6 +234,99 @@ return (ccw(A,C,D)!=ccw(B,C,D)) && (ccw(A,B,C)!=ccw(A,B,D));
 
 }
 
+/* ---------------- MST ---------------- */
+
+computeMST(){
+
+let all=[];
+
+for(let i=0;i<this.nodes.length;i++){
+for(let j=i+1;j<this.nodes.length;j++){
+
+let a=this.nodes[i], b=this.nodes[j];
+
+all.push({
+a,b,
+cost:Phaser.Math.Distance.Between(a.x,a.y,b.x,b.y)
+});
+}
+}
+
+all.sort((a,b)=>a.cost-b.cost);
+
+let parent=new Map();
+this.nodes.forEach(n=>parent.set(n,n));
+
+function find(x){
+while(parent.get(x)!==x) x=parent.get(x);
+return x;
+}
+
+function union(a,b){
+parent.set(find(a),find(b));
+}
+
+let total=0;
+
+for(let e of all){
+
+let pa=find(e.a), pb=find(e.b);
+
+if(pa!==pb){
+union(pa,pb);
+total+=e.cost;
+}
+}
+
+this.perfectCost = total;
+
+}
+
+/* ---------------- WIN ---------------- */
+
+checkWin(){
+
+if(this.edges.length !== this.nodes.length-1) return;
+
+/* verific conectivitate */
+let visited=new Set();
+let stack=[this.nodes[0]];
+
+while(stack.length){
+let n=stack.pop();
+visited.add(n);
+
+this.edges.forEach(e=>{
+if(e.a===n && !visited.has(e.b)) stack.push(e.b);
+if(e.b===n && !visited.has(e.a)) stack.push(e.a);
+});
+}
+
+if(visited.size !== this.nodes.length) return;
+
+/* SCOR DOAR AICI */
+let total = this.edges.reduce((s,e)=>s+e.cost,0);
+let score = Math.floor((this.perfectCost/total)*100);
+
+this.add.text(
+this.scale.width/2,
+this.scale.height/2,
+"✔ NIVEL COMPLET\nScor: "+score,
+{
+fontSize:"42px",
+color:"#22c55e",
+align:"center"
+}
+).setOrigin(0.5);
+
+/* next level */
+this.time.delayedCall(2000,()=>{
+this.level++;
+this.scene.restart();
+});
+
+}
+
 /* ---------------- DRAW ---------------- */
 
 draw(){
@@ -371,14 +334,14 @@ draw(){
 this.lineGraphics.clear();
 
 this.edges.forEach(e=>{
-this.lineGraphics.lineStyle(6,0x00e5ff);
+this.lineGraphics.lineStyle(8,0x00e5ff);
 this.lineGraphics.strokeLineShape(
 new Phaser.Geom.Line(e.x1,e.y1,e.x2,e.y2)
 );
 });
 
 if(this.currentLine){
-this.lineGraphics.lineStyle(3,0xffffff,0.5);
+this.lineGraphics.lineStyle(4,0xffffff,0.5);
 this.lineGraphics.strokeLineShape(
 new Phaser.Geom.Line(
 this.currentLine.x1,
@@ -390,19 +353,6 @@ this.currentLine.y2
 
 }
 
-/* ---------------- HELPERS ---------------- */
-
-getNode(x,y){
-
-for(let n of this.nodes){
-if(Phaser.Math.Distance.Between(x,y,n.x,n.y) < this.nodeRadius)
-return n;
-}
-
-return null;
-
-}
-
 /* ---------------- UNDO ---------------- */
 
 undo(){
@@ -411,7 +361,6 @@ let last=this.history.pop();
 if(!last) return;
 
 this.edges=this.edges.filter(e=>e!==last);
-this.updateConnectivity();
 this.draw();
 
 }
@@ -421,15 +370,15 @@ this.draw();
 createUI(){
 
 this.add.text(10,10,
-"Conectează toate nodurile\nfără intersecții\ncu linii minime",
+"Leagă toate punctele\nfără linii care se intersectează",
 {
-fontSize:"18px",
+fontSize:"20px",
 color:"#000"
 });
 
 let btn=this.add.text(
-this.scale.width-50,10,"↩",
-{fontSize:"28px",backgroundColor:"#ccc"}
+this.scale.width-60,10,"↩",
+{fontSize:"32px",backgroundColor:"#ccc"}
 )
 .setInteractive()
 .on("pointerdown",()=>this.undo());
