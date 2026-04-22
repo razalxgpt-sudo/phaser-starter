@@ -9,24 +9,18 @@ create() {
     this.drawGrid();
 
     this.nodes = [];
+    this.links = [];
+    this.selectedNode = null;
 
-    // creare nod la click
-    this.input.on("pointerdown", (pointer, currentlyOver) => {
-
-        // dacă dai click pe nod existent nu crea altul
-        if (currentlyOver.length > 0) return;
-
-        this.createNode(pointer.x, pointer.y);
-    });
-
-    // DRAG GLOBAL (corect)
+    // drag global
     this.input.on("drag", (pointer, gameObject, dragX, dragY) => {
         gameObject.x = dragX;
         gameObject.y = dragY;
+        this.redrawLinks();
     });
 
-    this.add.text(10, 10, "Click = node | Drag = move", {
-        fontSize: "16px",
+    this.add.text(10, 10, "Click empty = node | Drag = move | Click node->node = connect", {
+        fontSize: "14px",
         fill: "#888888"
     });
 
@@ -63,10 +57,67 @@ createNode(x, y) {
     circle.setInteractive();
     this.input.setDraggable(circle);
 
+    circle.on("pointerdown", () => {
+        this.handleNodeClick(circle);
+    });
+
     this.nodes.push(circle);
 }
 
+handleNodeClick(node) {
+
+    if (this.selectedNode === null) {
+        this.selectedNode = node;
+        node.setFillStyle(0xffff00);
+        return;
+    }
+
+    if (this.selectedNode === node) {
+        node.setFillStyle(0x00ffcc);
+        this.selectedNode = null;
+        return;
+    }
+
+    this.createLink(this.selectedNode, node);
+
+    this.selectedNode.setFillStyle(0x00ffcc);
+    this.selectedNode = null;
+}
+
+createLink(a, b) {
+
+    const line = this.add.line(0, 0, a.x, a.y, b.x, b.y, 0x8888ff)
+        .setOrigin(0, 0)
+        .setLineWidth(2);
+
+    this.links.push({ a, b, line });
+}
+
+redrawLinks() {
+
+    this.links.forEach(link => {
+        link.line.setTo(
+            link.a.x,
+            link.a.y,
+            link.b.x,
+            link.b.y
+        );
+    });
+}
+
 update() {
+
+    // click pe empty space -> create node
+    if (this.input.activePointer.justDown) {
+
+        const pointer = this.input.activePointer;
+        const objects = this.input.hitTestPointer(pointer);
+
+        if (objects.length === 0) {
+            this.createNode(pointer.x, pointer.y);
+        }
+    }
+
 }
 
 }
