@@ -12,10 +12,14 @@ this.lines = [];
 this.selectedNode = null;
 this.totalCost = 0;
 
-this.costText = this.add.text(20,20,"Cost: 0",{
-fontSize:"20px",
-color:"#ffffff"
-}).setDepth(1000);
+this.costText = this.add.text(20, 40, "Cost: 0", {
+fontSize: Math.round(this.scale.width * 0.05) + "px",
+color: "#ffffff",
+backgroundColor: "#00000066",
+padding: { x: 8, y: 4 }
+})
+.setDepth(2000)
+.setScrollFactor(0);
 
 this.createNodes();
 
@@ -181,12 +185,14 @@ line.setLineWidth(3);
 const midX=(nodeA.x+nodeB.x)/2;
 const midY=(nodeA.y+nodeB.y)/2;
 
-const costLabel=this.add.text(midX,midY,distance,{
-fontSize:"14px",
-color:"#ffffff",
-backgroundColor:"#00000088",
-padding:{x:4,y:2}
-}).setOrigin(0.5);
+const costLabel = this.add.text(midX, midY, distance, {
+fontSize: Math.round(this.scale.width * 0.035) + "px",
+color: "#ffffff",
+backgroundColor: "#000000aa",
+padding: { x: 6, y: 3 }
+})
+.setOrigin(0.5)
+.setDepth(2000);
 
 this.lines.push({line,costLabel});
 
