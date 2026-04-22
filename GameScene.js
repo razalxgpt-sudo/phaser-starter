@@ -9,47 +9,53 @@ this.history = [];
 this.currentLine = null;
 this.startNode = null;
 
-this.maxNodes = 6;
+this.level = 1;
+this.maxNodes = 4;
 
 this.nodeRadius = 0;
 this.symbolSize = 0;
 
 this.score = 0;
-this.perfectScore = 0;
+this.perfectCost = 0;
+
+this.ageGroup = this.detectAge();
 
 this.symbols = ["▲","●","■","◆","★","✚","⬟","⬢","⬣","✦","✿","☀"];
-
 }
 
 create() {
 
-this.computeResponsiveSizes();
+this.computeSizes();
 
 this.createBackground();
-
-this.graphics = this.add.graphics().setDepth(1);
 this.lineGraphics = this.add.graphics().setDepth(2);
-this.uiLayer = this.add.container().setDepth(10);
 
 this.createNodes();
 this.enableInput();
 this.createUI();
 
-this.calculatePerfectScore();
+this.computeMST();
 
 }
 
-/* ---------------- RESPONSIVE ---------------- */
+/* ---------------- AGE ---------------- */
 
-computeResponsiveSizes(){
+detectAge(){
+return localStorage.getItem("ageGroup") || "child";
+}
 
-let minDim = Math.min(this.scale.width, this.scale.height);
+/* ---------------- SIZES ---------------- */
 
-/* max 12 noduri → trebuie lizibil */
-this.nodeRadius = Math.floor(minDim / (this.maxNodes * 2.5));
-this.nodeRadius = Phaser.Math.Clamp(this.nodeRadius, 28, 60);
+computeSizes(){
 
-this.symbolSize = Math.floor(this.nodeRadius * 0.9);
+let w = window.innerWidth;
+let h = window.innerHeight;
+
+/* PE MOBIL creștem agresiv */
+this.nodeRadius = Math.floor(Math.min(w,h) / 8);
+this.nodeRadius = Phaser.Math.Clamp(this.nodeRadius, 40, 90);
+
+this.symbolSize = Math.floor(this.nodeRadius * 0.8);
 
 }
 
@@ -57,21 +63,16 @@ this.symbolSize = Math.floor(this.nodeRadius * 0.9);
 
 createBackground(){
 
-const g = this.add.graphics().setDepth(-1000);
-const w = this.scale.width;
-const h = this.scale.height;
+let g = this.add.graphics().setDepth(-1000);
+let w=this.scale.width, h=this.scale.height;
 
-const top = 0xfef3c7;
-const bottom = 0xbfdbfe;
-
-for (let i=0;i<h;i++){
+for(let i=0;i<h;i++){
 let t=i/h;
-let c=Phaser.Display.Color.Interpolate.ColorWithColor(
-Phaser.Display.Color.ValueToColor(top),
-Phaser.Display.Color.ValueToColor(bottom),
-h,i
-);
-g.fillStyle(Phaser.Display.Color.GetColor(c.r,c.g,c.b),1);
+let r=200 - t*50;
+let gcol=220 - t*80;
+let b=255 - t*120;
+let c = Phaser.Display.Color.GetColor(r,gcol,b);
+g.fillStyle(c,1);
 g.fillRect(0,i,w,1);
 }
 
@@ -81,56 +82,70 @@ g.fillRect(0,i,w,1);
 
 createNodes(){
 
-const w = this.scale.width;
-const h = this.scale.height;
+this.nodes=[];
 
-let tries = 0;
+let w=this.scale.width;
+let h=this.scale.height;
 
-while(this.nodes.length < this.maxNodes && tries < 1000){
+this.maxNodes = Math.min(4 + this.level, 12);
+
+let tries=0;
+
+while(this.nodes.length < this.maxNodes && tries<2000){
 
 tries++;
 
-let x = Phaser.Math.Between(80, w-80);
-let y = Phaser.Math.Between(140, h-80);
+let x=Phaser.Math.Between(100,w-100);
+let y=Phaser.Math.Between(150,h-100);
 
-let ok = true;
+let ok=true;
 
-for (let n of this.nodes){
-let d = Phaser.Math.Distance.Between(x,y,n.x,n.y);
-if (d < this.nodeRadius * 3) ok = false;
+for(let n of this.nodes){
+let d=Phaser.Math.Distance.Between(x,y,n.x,n.y);
+if(d < this.nodeRadius*2.5) ok=false;
 }
 
-if (!ok) continue;
+if(!ok) continue;
 
-/* evită aliniere */
-let aligned = this.nodes.some(n => Math.abs(n.x-x)<40 || Math.abs(n.y-y)<40);
-if (aligned) continue;
+/* fără aliniere */
+let aligned = this.nodes.some(n =>
+Math.abs(n.x-x)<this.nodeRadius ||
+Math.abs(n.y-y)<this.nodeRadius
+);
 
-let node = this.add.circle(x,y,this.nodeRadius,0xffffff);
-node.setStrokeStyle(4,0x222222);
+if(aligned) continue;
 
-let symbol = this.add.text(x,y,this.symbols[this.nodes.length],{
-fontSize: this.symbolSize + "px",
+let node = this.add.circle(x,y,this.nodeRadius,0xffffff)
+.setStrokeStyle(5,0x000000);
+
+if(this.ageGroup==="child"){
+let s = this.add.text(x,y,this.symbols[this.nodes.length],{
+fontSize:this.symbolSize+"px",
 color:"#000"
 }).setOrigin(0.5);
+node.label=s;
+}else{
+let value = Phaser.Math.Between(1,5);
+node.value=value;
+let s = this.add.text(x,y,value,{
+fontSize:this.symbolSize+"px",
+color:"#000"
+}).setOrigin(0.5);
+node.label=s;
+}
 
-node.symbol = symbol;
-
+node.connected=false;
 this.nodes.push(node);
 
 }
 
-/* pulse doar dacă neconectat */
-this.nodes.forEach(n=>{
-n.connected = false;
-
+/* pulse */
 this.tweens.add({
-targets:n,
-scale:1.08,
-duration:800,
+targets:this.nodes,
+scale:1.1,
+duration:700,
 yoyo:true,
 repeat:-1
-});
 });
 
 }
@@ -140,53 +155,35 @@ repeat:-1
 enableInput(){
 
 this.input.on("pointerdown",(p)=>{
+let n=this.getNode(p.x,p.y);
+if(!n) return;
 
-let node = this.getNodeAt(p.x,p.y);
-if (!node) return;
-
-this.startNode = node;
-
-this.currentLine = {
-x1: node.x,
-y1: node.y,
-x2: p.x,
-y2: p.y
-};
-
+this.startNode=n;
+this.currentLine={x1:n.x,y1:n.y,x2:p.x,y2:p.y};
 });
 
 this.input.on("pointermove",(p)=>{
-
-if (!this.currentLine) return;
-
-this.currentLine.x2 = p.x;
-this.currentLine.y2 = p.y;
-
+if(!this.currentLine) return;
+this.currentLine.x2=p.x;
+this.currentLine.y2=p.y;
 this.draw();
-
 });
 
 this.input.on("pointerup",(p)=>{
 
-if (!this.currentLine) return;
+if(!this.currentLine) return;
 
-let target = this.getNodeAt(p.x,p.y);
+let t=this.getNode(p.x,p.y);
 
-if (target && target !== this.startNode){
+if(t && t!==this.startNode){
 
-/* blocare duplicate */
-let exists = this.edges.some(e =>
-(e.a===this.startNode && e.b===target) ||
-(e.a===target && e.b===this.startNode)
-);
+if(!this.edgeExists(this.startNode,t)){
 
-if (!exists){
+let e=this.makeEdge(this.startNode,t);
 
-let edge = this.createEdge(this.startNode,target);
-
-if (!this.intersects(edge)){
-this.edges.push(edge);
-this.history.push(edge);
+if(!this.intersects(e)){
+this.edges.push(e);
+this.history.push(e);
 }
 
 }
@@ -198,7 +195,6 @@ this.startNode=null;
 
 this.updateConnectivity();
 this.draw();
-this.updateScore();
 this.checkWin();
 
 });
@@ -209,19 +205,76 @@ this.input.keyboard.on("keydown-Z",()=>this.undo());
 
 /* ---------------- EDGE ---------------- */
 
-createEdge(a,b){
+makeEdge(a,b){
 
-let angle = Phaser.Math.Angle.Between(a.x,a.y,b.x,b.y);
+let ang = Phaser.Math.Angle.Between(a.x,a.y,b.x,b.y);
 
-let x1 = a.x + Math.cos(angle)*this.nodeRadius;
-let y1 = a.y + Math.sin(angle)*this.nodeRadius;
+let x1=a.x+Math.cos(ang)*this.nodeRadius;
+let y1=a.y+Math.sin(ang)*this.nodeRadius;
 
-let x2 = b.x - Math.cos(angle)*this.nodeRadius;
-let y2 = b.y - Math.sin(angle)*this.nodeRadius;
+let x2=b.x-Math.cos(ang)*this.nodeRadius;
+let y2=b.y-Math.sin(ang)*this.nodeRadius;
 
-let cost = Phaser.Math.Distance.Between(a.x,a.y,b.x,b.y);
+let cost=Phaser.Math.Distance.Between(a.x,a.y,b.x,b.y);
 
-return {x1,y1,x2,y2,a,b,cost};
+return {a,b,x1,y1,x2,y2,cost};
+
+}
+
+edgeExists(a,b){
+return this.edges.some(e =>
+(e.a===a && e.b===b)||(e.a===b && e.b===a)
+);
+}
+
+/* ---------------- MST ---------------- */
+
+computeMST(){
+
+let allEdges=[];
+
+for(let i=0;i<this.nodes.length;i++){
+for(let j=i+1;j<this.nodes.length;j++){
+
+let a=this.nodes[i], b=this.nodes[j];
+let cost=Phaser.Math.Distance.Between(a.x,a.y,b.x,b.y);
+
+allEdges.push({a,b,cost});
+}
+}
+
+/* sort */
+allEdges.sort((a,b)=>a.cost-b.cost);
+
+/* union-find simplu */
+let parent=new Map();
+this.nodes.forEach(n=>parent.set(n,n));
+
+function find(x){
+while(parent.get(x)!==x) x=parent.get(x);
+return x;
+}
+
+function union(a,b){
+parent.set(find(a),find(b));
+}
+
+let mst=[];
+let total=0;
+
+for(let e of allEdges){
+
+let pa=find(e.a), pb=find(e.b);
+
+if(pa!==pb){
+union(pa,pb);
+mst.push(e);
+total+=e.cost;
+}
+
+}
+
+this.perfectCost=total;
 
 }
 
@@ -231,31 +284,20 @@ updateConnectivity(){
 
 this.nodes.forEach(n=>n.connected=false);
 
-if (this.nodes.length===0) return;
-
-let visited = new Set();
-let stack = [this.nodes[0]];
+let stack=[this.nodes[0]];
+let visited=new Set();
 
 while(stack.length){
-
-let node = stack.pop();
-visited.add(node);
+let n=stack.pop();
+visited.add(n);
 
 this.edges.forEach(e=>{
-if (e.a===node && !visited.has(e.b)) stack.push(e.b);
-if (e.b===node && !visited.has(e.a)) stack.push(e.a);
+if(e.a===n && !visited.has(e.b)) stack.push(e.b);
+if(e.b===n && !visited.has(e.a)) stack.push(e.a);
 });
-
 }
 
 visited.forEach(n=>n.connected=true);
-
-/* oprește pulse pentru conectate */
-this.nodes.forEach(n=>{
-if (n.connected){
-n.setScale(1);
-}
-});
 
 }
 
@@ -263,38 +305,53 @@ n.setScale(1);
 
 checkWin(){
 
-if (this.edges.length !== this.nodes.length -1) return;
+if(this.edges.length !== this.nodes.length-1) return;
 
-let allConnected = this.nodes.every(n=>n.connected);
+let all = this.nodes.every(n=>n.connected);
+if(!all) return;
 
-if (allConnected){
+/* scor */
+let total = this.edges.reduce((s,e)=>s+e.cost,0);
+let ratio = this.perfectCost / total;
+this.score = Math.floor(ratio*100);
+
+this.showWin();
+
+}
+
+showWin(){
 
 this.add.text(
 this.scale.width/2,
 this.scale.height/2,
-"✔ COMPLET",
+"✔ NIVEL COMPLET\nScor: "+this.score,
 {
 fontSize:"40px",
-color:"#22c55e"
+color:"#22c55e",
+align:"center"
 }
 ).setOrigin(0.5);
 
-}
+/* next level */
+this.time.delayedCall(2000,()=>{
+this.level++;
+this.scene.restart();
+});
 
 }
 
 /* ---------------- INTERSECTION ---------------- */
 
-intersects(newEdge){
+intersects(ne){
 
-for (let e of this.edges){
-if (this.lineIntersect(newEdge,e)) return true;
+for(let e of this.edges){
+if(this.cross(ne,e)) return true;
 }
 return false;
 
 }
 
-lineIntersect(a,b){
+cross(a,b){
 
 function ccw(A,B,C){
 return (C.y-A.y)*(B.x-A.x) > (B.y-A.y)*(C.x-A.x);
@@ -313,12 +370,14 @@ draw(){
 
 this.lineGraphics.clear();
 
-for (let e of this.edges){
-this.lineGraphics.lineStyle(5,0x06b6d4);
-this.lineGraphics.strokeLineShape(new Phaser.Geom.Line(e.x1,e.y1,e.x2,e.y2));
-}
+this.edges.forEach(e=>{
+this.lineGraphics.lineStyle(6,0x00e5ff);
+this.lineGraphics.strokeLineShape(
+new Phaser.Geom.Line(e.x1,e.y1,e.x2,e.y2)
+);
+});
 
-if (this.currentLine){
+if(this.currentLine){
 this.lineGraphics.lineStyle(3,0xffffff,0.5);
 this.lineGraphics.strokeLineShape(
 new Phaser.Geom.Line(
@@ -333,12 +392,13 @@ this.currentLine.y2
 
 /* ---------------- HELPERS ---------------- */
 
-getNodeAt(x,y){
+getNode(x,y){
 
-for (let n of this.nodes){
-let d = Phaser.Math.Distance.Between(x,y,n.x,n.y);
-if (d < this.nodeRadius) return n;
+for(let n of this.nodes){
+if(Phaser.Math.Distance.Between(x,y,n.x,n.y) < this.nodeRadius)
+return n;
 }
+
 return null;
 
 }
@@ -347,34 +407,12 @@ return null;
 
 undo(){
 
-let last = this.history.pop();
-if (!last) return;
+let last=this.history.pop();
+if(!last) return;
 
-this.edges = this.edges.filter(e=>e!==last);
-
+this.edges=this.edges.filter(e=>e!==last);
 this.updateConnectivity();
 this.draw();
-this.updateScore();
-
-}
-
-/* ---------------- SCORE ---------------- */
-
-calculatePerfectScore(){
-
-this.perfectScore = (this.nodes.length -1) * 100;
-
-}
-
-updateScore(){
-
-let total = this.edges.reduce((s,e)=>s+e.cost,0);
-
-this.score = Math.max(0, Math.floor(this.perfectScore - total/10));
-
-this.scoreText.setText(
-"Score: "+this.score+"\nPerfect: "+this.perfectScore
-);
 
 }
 
@@ -382,25 +420,19 @@ this.scoreText.setText(
 
 createUI(){
 
-this.scoreText = this.add.text(10,10,"",{
+this.add.text(10,10,
+"Conectează toate nodurile\nfără intersecții\ncu linii minime",
+{
 fontSize:"18px",
 color:"#000"
-}).setDepth(10);
+});
 
-let btn = this.add.text(
-this.scale.width-50,
-10,
-"↩",
-{
-fontSize:"26px",
-backgroundColor:"#ccc",
-padding:6
-}
+let btn=this.add.text(
+this.scale.width-50,10,"↩",
+{fontSize:"28px",backgroundColor:"#ccc"}
 )
 .setInteractive()
 .on("pointerdown",()=>this.undo());
-
-this.uiLayer.add(btn);
 
 }
 
