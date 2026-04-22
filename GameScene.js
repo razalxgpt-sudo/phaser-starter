@@ -1,246 +1,315 @@
 class GameScene extends Phaser.Scene {
-
-constructor(){
+constructor() {
 super("GameScene");
-}
-
-create(){
-
-this.connections = [];
-this.graphics = this.add.graphics();
-this.tempGraphics = this.add.graphics();
-
-this.createBackground();
-this.createNodes();
-
-this.input.on("pointermove", this.onPointerMove, this);
-this.input.on("pointerup", this.onPointerUp, this);
-
-}
-
-createBackground(){
-this.cameras.main.setBackgroundColor("#020617");
-}
-
-createNodes(){
 
 this.nodes = [];
-this.selectedNode = null;
+this.edges = [];
+this.history = [];
+this.currentLine = null;
+this.startNode = null;
 
-const count = 5;
+this.nodeRadius = 25;
+this.maxNodes = 6;
 
-for(let i=0;i<count;i++){
+this.score = 0;
+this.perfectScore = 0;
 
-const pos = this.getValidPosition();
-const value = Phaser.Math.Between(1,4);
+this.symbols = ["▲","●","■","◆","★","✚","⬟","⬢"];
 
-const node = this.add.circle(pos.x,pos.y,20,0xffffff);
-node.setStrokeStyle(2,0x000000);
+}
 
-node.value = value;
-node.connections = 0;
+create() {
 
-const label = this.add.text(pos.x,pos.y,value,{
-fontSize:"16px",
+this.createBackground();
+
+this.graphics = this.add.graphics();
+this.graphics.setDepth(1);
+
+this.lineGraphics = this.add.graphics();
+this.lineGraphics.setDepth(2);
+
+this.uiLayer = this.add.container().setDepth(10);
+
+this.createNodes();
+
+this.enableInput();
+
+this.createUI();
+
+this.calculatePerfectScore();
+
+}
+
+/* ---------------- BACKGROUND ---------------- */
+
+createBackground() {
+
+const w = this.scale.width;
+const h = this.scale.height;
+
+const g = this.add.graphics();
+g.setDepth(-1000);
+
+const top = 0xf0f4c3;
+const bottom = 0xcfd8dc;
+
+for (let i = 0; i < h; i++) {
+let t = i / h;
+let color = Phaser.Display.Color.Interpolate.ColorWithColor(
+Phaser.Display.Color.ValueToColor(top),
+Phaser.Display.Color.ValueToColor(bottom),
+h, i
+);
+let c = Phaser.Display.Color.GetColor(color.r, color.g, color.b);
+g.fillStyle(c, 1);
+g.fillRect(0, i, w, 1);
+}
+
+}
+
+/* ---------------- NODES ---------------- */
+
+createNodes() {
+
+const w = this.scale.width;
+const h = this.scale.height;
+
+let tries = 0;
+
+while (this.nodes.length < this.maxNodes && tries < 500) {
+
+tries++;
+
+let x = Phaser.Math.Between(80, w - 80);
+let y = Phaser.Math.Between(120, h - 80);
+
+let ok = true;
+
+for (let n of this.nodes) {
+let d = Phaser.Math.Distance.Between(x,y,n.x,n.y);
+if (d < 120) ok = false;
+}
+
+if (!ok) continue;
+
+/* anti-aliniere */
+let aligned = this.nodes.some(n => Math.abs(n.x - x) < 30 || Math.abs(n.y - y) < 30);
+if (aligned) continue;
+
+let node = this.add.circle(x,y,this.nodeRadius,0xffffff);
+node.setStrokeStyle(3,0x222222);
+
+let symbol = this.add.text(x,y,this.symbols[this.nodes.length],{
+fontSize: "20px",
 color:"#000"
 }).setOrigin(0.5);
 
-node.label = label;
-
-node.setInteractive();
-
-node.on("pointerdown",()=>{
-if(node.connections < node.value){
-this.selectedNode = node;
-}
-});
+node.symbol = symbol;
 
 this.nodes.push(node);
 
 }
 
-}
-
-getValidPosition(){
-
-let valid=false;
-let x,y;
-
-while(!valid){
-
-x=Phaser.Math.Between(80,this.scale.width-80);
-y=Phaser.Math.Between(120,this.scale.height-80);
-
-valid=true;
-
-for(let n of this.nodes){
-
-if(Phaser.Math.Distance.Between(x,y,n.x,n.y)<100){
-valid=false;
-break;
-}
+/* pulse pentru noduri */
+this.tweens.add({
+targets: this.nodes,
+scale: 1.1,
+duration: 800,
+yoyo: true,
+repeat: -1
+});
 
 }
 
+/* ---------------- INPUT ---------------- */
+
+enableInput() {
+
+this.input.on("pointerdown", (p) => {
+
+let node = this.getNodeAt(p.x,p.y);
+if (!node) return;
+
+this.startNode = node;
+
+this.currentLine = { x1: node.x, y1: node.y, x2: p.x, y2: p.y };
+
+});
+
+this.input.on("pointermove", (p) => {
+
+if (!this.currentLine) return;
+
+this.currentLine.x2 = p.x;
+this.currentLine.y2 = p.y;
+
+this.draw();
+
+});
+
+this.input.on("pointerup", (p) => {
+
+if (!this.currentLine) return;
+
+let target = this.getNodeAt(p.x,p.y);
+
+if (target && target !== this.startNode) {
+
+let edge = this.createEdge(this.startNode, target);
+
+if (!this.intersects(edge)) {
+
+this.edges.push(edge);
+this.history.push(edge);
+
+} 
+
 }
 
-return{x,y};
+this.currentLine = null;
+this.startNode = null;
+
+this.draw();
+this.updateScore();
+
+});
+
+this.input.keyboard.on("keydown-Z", () => this.undo());
 
 }
 
-onPointerMove(pointer){
+/* ---------------- EDGE ---------------- */
 
-if(!this.selectedNode) return;
+createEdge(a,b) {
 
-this.tempGraphics.clear();
-this.tempGraphics.lineStyle(3,0x00bcd4);
+/* snap la margine */
+let angle = Phaser.Math.Angle.Between(a.x,a.y,b.x,b.y);
 
-this.tempGraphics.beginPath();
-this.tempGraphics.moveTo(this.selectedNode.x,this.selectedNode.y);
-this.tempGraphics.lineTo(pointer.x,pointer.y);
-this.tempGraphics.strokePath();
+let x1 = a.x + Math.cos(angle)*this.nodeRadius;
+let y1 = a.y + Math.sin(angle)*this.nodeRadius;
+
+let x2 = b.x - Math.cos(angle)*this.nodeRadius;
+let y2 = b.y - Math.sin(angle)*this.nodeRadius;
+
+let cost = Phaser.Math.Distance.Between(a.x,a.y,b.x,b.y);
+
+return {x1,y1,x2,y2,a,b,cost};
+
+}
+
+/* ---------------- INTERSECTION ---------------- */
+
+intersects(newEdge) {
+
+for (let e of this.edges) {
+
+if (this.lineIntersect(newEdge,e)) return true;
 
 }
 
-onPointerUp(pointer){
-
-if(!this.selectedNode) return;
-
-const target = this.getNodeAt(pointer.x,pointer.y);
-
-if(target && target !== this.selectedNode){
-this.tryCreateConnection(this.selectedNode,target);
-}
-
-this.tempGraphics.clear();
-this.selectedNode = null;
+return false;
 
 }
+
+lineIntersect(a,b) {
+
+function ccw(A,B,C){
+return (C.y-A.y)*(B.x-A.x) > (B.y-A.y)*(C.x-A.x);
+}
+
+let A={x:a.x1,y:a.y1}, B={x:a.x2,y:a.y2};
+let C={x:b.x1,y:b.y1}, D={x:b.x2,y:b.y2};
+
+return (ccw(A,C,D) != ccw(B,C,D)) && (ccw(A,B,C) != ccw(A,B,D));
+
+}
+
+/* ---------------- DRAW ---------------- */
+
+draw() {
+
+this.lineGraphics.clear();
+
+for (let e of this.edges) {
+this.lineGraphics.lineStyle(4,0x00e5ff);
+this.lineGraphics.strokeLineShape(new Phaser.Geom.Line(e.x1,e.y1,e.x2,e.y2));
+}
+
+if (this.currentLine) {
+this.lineGraphics.lineStyle(2,0xffffff,0.5);
+this.lineGraphics.strokeLineShape(new Phaser.Geom.Line(
+this.currentLine.x1,
+this.currentLine.y1,
+this.currentLine.x2,
+this.currentLine.y2
+));
+}
+
+}
+
+/* ---------------- HELPERS ---------------- */
 
 getNodeAt(x,y){
 
-for(let node of this.nodes){
-
-const d = Phaser.Math.Distance.Between(x,y,node.x,node.y);
-
-if(d < 24){
-return node;
-}
-
+for (let n of this.nodes){
+let d = Phaser.Math.Distance.Between(x,y,n.x,n.y);
+if (d < this.nodeRadius) return n;
 }
 
 return null;
 
 }
 
-tryCreateConnection(a,b){
+/* ---------------- UNDO ---------------- */
 
-if(a.connections >= a.value) return;
-if(b.connections >= b.value) return;
+undo(){
 
-if(this.connectionExists(a,b)) return;
+let last = this.history.pop();
+if (!last) return;
 
-if(this.wouldIntersect(a,b)) return;
+this.edges = this.edges.filter(e => e !== last);
 
-this.createConnection(a,b);
-
-}
-
-connectionExists(a,b){
-
-for(let c of this.connections){
-if((c.a===a && c.b===b) || (c.a===b && c.b===a)){
-return true;
-}
-}
-return false;
+this.draw();
+this.updateScore();
 
 }
 
-wouldIntersect(a,b){
+/* ---------------- SCORE ---------------- */
 
-for(let c of this.connections){
+calculatePerfectScore(){
 
-if(this.linesIntersect(
-a.x,a.y,
-b.x,b.y,
-c.a.x,c.a.y,
-c.b.x,c.b.y
-)){
-return true;
-}
+this.perfectScore = (this.nodes.length - 1) * 100;
 
 }
 
-return false;
+updateScore(){
+
+let total = this.edges.reduce((s,e)=>s+e.cost,0);
+
+this.score = Math.max(0, Math.floor(this.perfectScore - total/10));
+
+this.scoreText.setText("Score: "+this.score+"\nPerfect: "+this.perfectScore);
 
 }
 
-linesIntersect(x1,y1,x2,y2,x3,y3,x4,y4){
+/* ---------------- UI ---------------- */
 
-function ccw(ax,ay,bx,by,cx,cy){
-return (cy-ay)*(bx-ax) > (by-ay)*(cx-ax);
-}
+createUI(){
 
-return (ccw(x1,y1,x3,y3,x4,y4) !== ccw(x2,y2,x3,y3,x4,y4)) &&
-(ccw(x1,y1,x2,y2,x3,y3) !== ccw(x1,y1,x2,y2,x4,y4));
+this.scoreText = this.add.text(10,10,"",{
+fontSize:"16px",
+color:"#000"
+}).setDepth(10);
 
-}
+let btn = this.add.text(this.scale.width-40,10,"↩",{
+fontSize:"22px",
+backgroundColor:"#ccc",
+padding:6
+})
+.setInteractive()
+.on("pointerdown",()=>this.undo());
 
-createConnection(a,b){
-
-this.graphics.lineStyle(3,0x00bcd4);
-
-this.graphics.beginPath();
-this.graphics.moveTo(a.x,a.y);
-this.graphics.lineTo(b.x,b.y);
-this.graphics.strokePath();
-
-this.connections.push({a,b});
-
-a.connections++;
-b.connections++;
-
-this.updateNode(a);
-this.updateNode(b);
-
-this.checkWin();
-
-}
-
-updateNode(node){
-
-if(node.connections === node.value){
-node.setFillStyle(0x66bb6a);
-}else{
-node.setFillStyle(0xffffff);
-}
-
-}
-
-checkWin(){
-
-for(let node of this.nodes){
-if(node.connections !== node.value){
-return;
-}
-}
-
-this.showWin();
-
-}
-
-showWin(){
-
-this.add.text(
-this.scale.width/2,
-50,
-"Puzzle complet!",
-{
-fontSize:"28px",
-color:"#00ffcc"
-}
-).setOrigin(0.5);
+this.uiLayer.add(btn);
 
 }
 
