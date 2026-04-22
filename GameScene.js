@@ -36,16 +36,16 @@ const count = 5;
 for(let i=0;i<count;i++){
 
 const pos = this.getValidPosition();
-const value = Phaser.Math.Between(1,5);
+const value = Phaser.Math.Between(1,4);
 
-const node = this.add.circle(pos.x,pos.y,18,0xffffff);
+const node = this.add.circle(pos.x,pos.y,20,0xffffff);
 node.setStrokeStyle(2,0x000000);
 
 node.value = value;
-node.connected = false;
+node.connections = 0;
 
 const label = this.add.text(pos.x,pos.y,value,{
-fontSize:"14px",
+fontSize:"16px",
 color:"#000"
 }).setOrigin(0.5);
 
@@ -79,7 +79,7 @@ valid=true;
 
 for(let n of this.nodes){
 
-if(Phaser.Math.Distance.Between(x,y,n.x,n.y)<90){
+if(Phaser.Math.Distance.Between(x,y,n.x,n.y)<100){
 valid=false;
 break;
 }
@@ -117,7 +117,7 @@ if(!this.selectedNode) return;
 const target = this.getNodeAt(pointer.x,pointer.y);
 
 if(target && target !== this.selectedNode){
-this.createConnection(this.selectedNode,target);
+this.tryCreateConnection(this.selectedNode,target);
 }
 
 this.tempGraphics.clear();
@@ -133,7 +133,7 @@ for(let node of this.nodes){
 
 const d = Phaser.Math.Distance.Between(x,y,node.x,node.y);
 
-if(d < 22){
+if(d < 24){
 return node;
 }
 
@@ -143,7 +143,34 @@ return null;
 
 }
 
-/* CONNECTION */
+/* TRY CONNECTION */
+
+tryCreateConnection(a,b){
+
+if(a.connections >= a.value) return;
+if(b.connections >= b.value) return;
+
+if(this.connectionExists(a,b)) return;
+
+this.createConnection(a,b);
+
+}
+
+/* CHECK EXIST */
+
+connectionExists(a,b){
+
+for(let c of this.connections){
+if((c.a===a && c.b===b) || (c.a===b && c.b===a)){
+return true;
+}
+}
+
+return false;
+
+}
+
+/* CREATE CONNECTION */
 
 createConnection(a,b){
 
@@ -156,25 +183,55 @@ this.graphics.strokePath();
 
 this.connections.push({a,b});
 
-a.connected = true;
-b.connected = true;
+a.connections++;
+b.connections++;
+
+this.updateNodeState(a);
+this.updateNodeState(b);
+
+this.checkWin();
 
 }
 
-/* UPDATE */
+/* NODE STATE */
 
-update(){
+updateNodeState(node){
+
+if(node.connections === node.value){
+node.setFillStyle(0x66bb6a);
+}else{
+node.setFillStyle(0xffffff);
+}
+
+}
+
+/* WIN CHECK */
+
+checkWin(){
 
 for(let node of this.nodes){
-
-if(!node.connected){
-node.alpha = 0.7 + Math.sin(this.time.now/300)*0.3;
-}else{
-node.alpha = 1;
+if(node.connections !== node.value){
+return;
+}
 }
 
-}
+this.showWin();
 
 }
 
+/* WIN */
+
+showWin(){
+
+const text = this.add.text(
+this.scale.width/2,
+50,
+"Puzzle complet!",
+{
+fontSize:"28px",
+color:"#00ffcc"
+}
+).setOrigin(0.5);
+
+}
 }
